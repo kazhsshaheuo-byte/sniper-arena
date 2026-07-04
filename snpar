@@ -1,22 +1,23 @@
+-- Polo Sniper Arena - Optimized for Solara v3
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 
 local Settings = {
     Aimbot = true,
     AimbotSmooth = 0.1,
     AimbotFOV = 200,
     ESP_Box = true,
-    VisCheck = true -- Wall check enabled
+    VisCheck = true
 }
 
 local isKeyPressed = false
 local Drawings = {}
+local ESPObjects = {}
 
--- Key bindings for E key
+-- Перехват клавиши E
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.E then
         isKeyPressed = true
@@ -29,7 +30,7 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Function to check if player is visible (wall check)
+-- Проверка видимости
 local function IsPlayerVisible(character)
     if not character or not character:FindFirstChild("Head") then
         return false
@@ -39,19 +40,16 @@ local function IsPlayerVisible(character)
     local origin = Camera.CFrame.Position
     local direction = (head.Position - origin).Unit * (head.Position - origin).Magnitude
     
-    -- Check if head is visible
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
     raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
     
     local raycastResult = workspace:Raycast(origin, direction, raycastParams)
     
-    -- If no hit, or hit is the head itself, it's visible
     if not raycastResult then
         return true
     end
     
-    -- Check if the hit is part of the target's head
     local hitPart = raycastResult.Instance
     if hitPart and hitPart:IsDescendantOf(character) then
         return true
@@ -60,7 +58,7 @@ local function IsPlayerVisible(character)
     return false
 end
 
--- Function to get closest player to crosshair
+-- Получение ближайшего игрока
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = math.huge
@@ -71,7 +69,6 @@ local function GetClosestPlayer()
             local character = player.Character
             local head = character.Head
             
-            -- Check visibility first if wall check is enabled
             if Settings.VisCheck and not IsPlayerVisible(character) then
                 continue
             end
@@ -90,54 +87,72 @@ local function GetClosestPlayer()
     return closest
 end
 
--- Main loop
+-- Функция для безопасного создания Drawing (для Solara)
+local function CreateDrawing(drawingType)
+    local success, result = pcall(function()
+        return Drawing.new(drawingType)
+    end)
+    if success then
+        return result
+    else
+        return nil
+    end
+end
+
+-- Главный цикл
 RunService.RenderStepped:Connect(function()
-    -- Clear old drawings
+    -- Очистка старых рисунков
     for _, drawing in pairs(Drawings) do
-        drawing:Remove()
+        pcall(function()
+            drawing:Remove()
+        end)
     end
     Drawings = {}
     
-    -- Draw FOV circle
-    local fovCircle = Drawing.new("Circle")
-    fovCircle.Visible = true
-    fovCircle.Radius = Settings.AimbotFOV
-    fovCircle.Thickness = 2
-    fovCircle.Color = Color3.fromRGB(255, 255, 255)
-    fovCircle.Filled = false
-    fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    table.insert(Drawings, fovCircle)
+    -- Рисуем FOV круг (если поддерживается)
+    local fovCircle = CreateDrawing("Circle")
+    if fovCircle then
+        fovCircle.Visible = true
+        fovCircle.Radius = Settings.AimbotFOV
+        fovCircle.Thickness = 2
+        fovCircle.Color = Color3.fromRGB(255, 255, 255)
+        fovCircle.Filled = false
+        fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        table.insert(Drawings, fovCircle)
+    end
     
-    -- ESP Box
+    -- ESP Box (используем Highlight)
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
             
-            -- Only show ESP if visible (optional, but makes sense with wall check)
             if Settings.VisCheck and not IsPlayerVisible(character) then
-                -- Remove ESP if not visible
                 local highlight = character:FindFirstChild("PoloESP")
                 if highlight then
-                    highlight:Destroy()
+                    pcall(function()
+                        highlight:Destroy()
+                    end)
                 end
                 continue
             end
             
-            -- ESP Box
             if Settings.ESP_Box then
                 local highlight = character:FindFirstChild("PoloESP")
                 if not highlight then
-                    highlight = Instance.new("Highlight", character)
-                    highlight.Name = "PoloESP"
-                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
-                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    highlight.FillTransparency = 0.5
+                    pcall(function()
+                        highlight = Instance.new("Highlight", character)
+                        highlight.Name = "PoloESP"
+                        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        highlight.FillTransparency = 0.5
+                        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    end)
                 end
             end
         end
     end
     
-    -- Aimbot with wall check
+    -- Аимбот
     if Settings.Aimbot and isKeyPressed then
         local target = GetClosestPlayer()
         if target then
@@ -148,19 +163,29 @@ RunService.RenderStepped:Connect(function()
             local deltaX = screenPos.X - mousePos.X
             local deltaY = screenPos.Y - mousePos.Y
             
-            if Settings.AimbotSmooth > 0 then
-                mousemoverel(deltaX / (1/Settings.AimbotSmooth), deltaY / (1/Settings.AimbotSmooth))
-            else
-                mousemoverel(deltaX, deltaY)
+            -- Для Solara используем mouse_move с небольшим delay
+            if math.abs(deltaX) > 1 or math.abs(deltaY) > 1 then
+                pcall(function()
+                    if Settings.AimbotSmooth > 0 then
+                        local smoothFactor = 1 / Settings.AimbotSmooth
+                        mousemoverel(deltaX / smoothFactor, deltaY / smoothFactor)
+                    else
+                        mousemoverel(deltaX, deltaY)
+                    end
+                end)
             end
         end
     end
 end)
 
--- Notify loaded
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "Polo Sniper Arena",
-    Text = "Loaded! Hold E for aimbot | Wall check active",
-    Duration = 3
-})
-```
+-- Уведомление для Solara
+pcall(function()
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Polo Sniper Arena",
+        Text = "Loaded! Hold E for aimbot | Solara v3",
+        Duration = 3
+    })
+end)
+
+print("Polo Sniper Arena loaded successfully!")
+print("Hold E key for aimbot")
