@@ -1,4 +1,4 @@
--- Polo Sniper Arena - ULTIMATE (Aimbot + TriggerBot + ESP + FOV + WallCheck)
+-- Polo Sniper Arena - ВЗЯТО ИЗ ВАШЕГО ФАЙЛА (Aimbot + TriggerBot)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -15,12 +15,12 @@ local Settings = {
     
     TriggerBot = true,
     TriggerDelay = 0.05,
-    TriggerPrecision = 15, -- Точность наведения для выстрела
+    TriggerPrecision = 15,
     
     ESP_Box = true,
-    ESP_Visible = true, -- ESP через стены
+    ESP_Visible = true,
+    WallCheck = true,
     
-    WallCheck = true, -- Проверка стен для триггербота
     NoRecoil = true,
     NoSpread = true,
     FastReload = true,
@@ -47,7 +47,9 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- ===== UTILITY FUNCTIONS =====
+-- ===== ФУНКЦИИ ИЗ ВАШЕГО TXT ФАЙЛА =====
+
+-- Получение позиции головы
 local function GetHeadPosition(character)
     local head = character:FindFirstChild("Head")
     if head then
@@ -56,9 +58,11 @@ local function GetHeadPosition(character)
     return nil
 end
 
+-- Проверка видимости (из вашего файла)
 local function IsPlayerVisible(character)
-    if not Settings.WallCheck then return true end
-    if not character or not character:FindFirstChild("Head") then return false end
+    if not character or not character:FindFirstChild("Head") then
+        return false
+    end
     
     local head = character.Head
     local origin = Camera.CFrame.Position
@@ -70,7 +74,9 @@ local function IsPlayerVisible(character)
     
     local raycastResult = workspace:Raycast(origin, direction, raycastParams)
     
-    if not raycastResult then return true end
+    if not raycastResult then
+        return true
+    end
     
     local hitPart = raycastResult.Instance
     if hitPart and hitPart:IsDescendantOf(character) then
@@ -80,25 +86,24 @@ local function IsPlayerVisible(character)
     return false
 end
 
--- ===== TRIGGERBOT (из вашего файла) =====
+-- ===== TRIGGERBOT (ИЗ ВАШЕГО ФАЙЛА) =====
+
+-- Проверка наведен ли прицел на голову (из вашего файла)
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     
-    local head = target.Character:FindFirstChild("Head")
-    if not head then return false end
+    local headPos = GetHeadPosition(target.Character)
+    if not headPos then return false end
     
-    local headPos = head.Position
-    local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
-    
-    if not onScreen then return false end
-    
+    local screenPos = Camera:WorldToViewportPoint(headPos)
     local mousePos = UserInputService:GetMouseLocation()
+    
     local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
     
     return dist < Settings.TriggerPrecision
 end
 
--- Функция для получения цели для триггербота (с проверкой стен)
+-- Получение цели для триггербота (из вашего файла)
 local function GetTriggerTarget()
     local bestTarget = nil
     local bestDist = math.huge
@@ -108,9 +113,9 @@ local function GetTriggerTarget()
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
             
-            -- Проверка стен для триггербота
-            if Settings.WallCheck and not IsPlayerVisible(character) then
-                continue -- Пропускаем невидимых
+            -- Проверка видимости (из вашего файла)
+            if not IsPlayerVisible(character) then
+                continue
             end
             
             local headPos = GetHeadPosition(character)
@@ -131,20 +136,9 @@ local function GetTriggerTarget()
     return bestTarget
 end
 
--- ===== SHOOT FUNCTION =====
-local function Shoot()
-    if not canShoot then return end
-    canShoot = false
-    
-    pcall(function()
-        mouse1click()
-    end)
-    
-    task.wait(Settings.TriggerDelay)
-    canShoot = true
-end
+-- ===== AIMBOT (ИЗ ВАШЕГО ФАЙЛА) =====
 
--- ===== GET CLOSEST PLAYER (для аимбота) =====
+-- Получение ближайшего игрока (из вашего файла)
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = math.huge
@@ -171,7 +165,20 @@ local function GetClosestPlayer()
     return closest
 end
 
--- ===== WEAPON MODS =====
+-- ===== ВЫСТРЕЛ =====
+local function Shoot()
+    if not canShoot then return end
+    canShoot = false
+    
+    pcall(function()
+        mouse1click()
+    end)
+    
+    task.wait(Settings.TriggerDelay)
+    canShoot = true
+end
+
+-- ===== МОДЫ НА ОРУЖИЕ (ИЗ ВАШЕГО ФАЙЛА) =====
 local function ApplyWeaponMods()
     pcall(function()
         local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
@@ -197,7 +204,7 @@ local function ApplyWeaponMods()
     end)
 end
 
--- ===== DRAW FOV CIRCLE =====
+-- ===== РИСОВАНИЕ FOV =====
 local function DrawFOV()
     local fovCircle = Drawing.new("Circle")
     fovCircle.Visible = true
@@ -208,7 +215,6 @@ local function DrawFOV()
     fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     table.insert(Drawings, fovCircle)
     
-    -- Crosshair dot
     local dot = Drawing.new("Circle")
     dot.Visible = true
     dot.Radius = 2
@@ -218,18 +224,18 @@ local function DrawFOV()
     table.insert(Drawings, dot)
 end
 
--- ===== MAIN LOOP =====
+-- ===== ГЛАВНЫЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
-    -- Clear old drawings
+    -- Очистка старых рисунков
     for _, drawing in pairs(Drawings) do
         pcall(function() drawing:Remove() end)
     end
     Drawings = {}
     
-    -- Draw FOV
+    -- FOV
     DrawFOV()
     
-    -- ===== ESP =====
+    -- ===== ESP (ИЗ ВАШЕГО ФАЙЛА) =====
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
@@ -269,7 +275,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== TRIGGERBOT (из вашего файла) =====
+    -- ===== TRIGGERBOT (ИЗ ВАШЕГО ФАЙЛА) =====
     if Settings.TriggerBot and canShoot then
         local target = GetTriggerTarget()
         if target then
@@ -282,7 +288,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== AIMBOT =====
+    -- ===== AIMBOT (ИЗ ВАШЕГО ФАЙЛА) =====
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         if target then
@@ -308,22 +314,22 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== WEAPON MODS =====
+    -- ===== МОДЫ НА ОРУЖИЕ (ИЗ ВАШЕГО ФАЙЛА) =====
     if Settings.NoRecoil or Settings.NoSpread or Settings.FastReload then
         ApplyWeaponMods()
     end
 end)
 
--- ===== NOTIFICATION =====
+-- ===== УВЕДОМЛЕНИЕ =====
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Polo Sniper Arena ULTIMATE",
-        Text = "ESP + Aimbot (E) + TriggerBot | WallCheck ON",
+        Title = "Polo Sniper Arena",
+        Text = "Aimbot (E) + TriggerBot | ВЗЯТО ИЗ ВАШЕГО TXT",
         Duration = 4
     })
 end)
 
-print("=== Polo Sniper Arena ULTIMATE loaded! ===")
+print("=== Polo Sniper Arena loaded! ===")
 print("Hold E for aimbot")
-print("Auto-shoot on head (TriggerBot)")
-print("ESP through walls")
+print("TriggerBot: ONLY visible targets")
+print("ВСЕ ФУНКЦИИ ИЗ ВАШЕГО TXT ФАЙЛА")
