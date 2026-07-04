@@ -1,4 +1,4 @@
--- Polo Sniper Arena - ВЗЯТО ИЗ ВАШЕГО ФАЙЛА (Aimbot + TriggerBot)
+-- Polo Sniper Arena - FAST AIMBOT
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,16 +6,15 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
--- ===== SETTINGS =====
 local Settings = {
     Aimbot = true,
-    AimbotSmooth = 0.02,
-    AimbotFOV = 250,
+    AimbotSmooth = 3,
+    AimbotFOV = 300,
     AimbotKey = Enum.KeyCode.E,
     
     TriggerBot = true,
-    TriggerDelay = 0.05,
-    TriggerPrecision = 15,
+    TriggerDelay = 0.03,
+    TriggerPrecision = 20,
     
     ESP_Box = true,
     ESP_Visible = true,
@@ -24,17 +23,12 @@ local Settings = {
     NoRecoil = true,
     NoSpread = true,
     FastReload = true,
-    
-    Hitbox = true,
-    HitboxSize = 3
 }
 
--- ===== VARIABLES =====
 local isAimbotKeyPressed = false
 local Drawings = {}
 local canShoot = true
 
--- ===== KEY BINDINGS =====
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
         isAimbotKeyPressed = true
@@ -47,9 +41,6 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- ===== ФУНКЦИИ ИЗ ВАШЕГО TXT ФАЙЛА =====
-
--- Получение позиции головы
 local function GetHeadPosition(character)
     local head = character:FindFirstChild("Head")
     if head then
@@ -58,7 +49,6 @@ local function GetHeadPosition(character)
     return nil
 end
 
--- Проверка видимости (из вашего файла)
 local function IsPlayerVisible(character)
     if not character or not character:FindFirstChild("Head") then
         return false
@@ -86,9 +76,6 @@ local function IsPlayerVisible(character)
     return false
 end
 
--- ===== TRIGGERBOT (ИЗ ВАШЕГО ФАЙЛА) =====
-
--- Проверка наведен ли прицел на голову (из вашего файла)
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     
@@ -103,7 +90,6 @@ local function IsAimingAtHead(target)
     return dist < Settings.TriggerPrecision
 end
 
--- Получение цели для триггербота (из вашего файла)
 local function GetTriggerTarget()
     local bestTarget = nil
     local bestDist = math.huge
@@ -113,7 +99,6 @@ local function GetTriggerTarget()
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
             
-            -- Проверка видимости (из вашего файла)
             if not IsPlayerVisible(character) then
                 continue
             end
@@ -136,9 +121,6 @@ local function GetTriggerTarget()
     return bestTarget
 end
 
--- ===== AIMBOT (ИЗ ВАШЕГО ФАЙЛА) =====
-
--- Получение ближайшего игрока (из вашего файла)
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = math.huge
@@ -165,7 +147,6 @@ local function GetClosestPlayer()
     return closest
 end
 
--- ===== ВЫСТРЕЛ =====
 local function Shoot()
     if not canShoot then return end
     canShoot = false
@@ -178,7 +159,6 @@ local function Shoot()
     canShoot = true
 end
 
--- ===== МОДЫ НА ОРУЖИЕ (ИЗ ВАШЕГО ФАЙЛА) =====
 local function ApplyWeaponMods()
     pcall(function()
         local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
@@ -204,7 +184,6 @@ local function ApplyWeaponMods()
     end)
 end
 
--- ===== РИСОВАНИЕ FOV =====
 local function DrawFOV()
     local fovCircle = Drawing.new("Circle")
     fovCircle.Visible = true
@@ -224,18 +203,14 @@ local function DrawFOV()
     table.insert(Drawings, dot)
 end
 
--- ===== ГЛАВНЫЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
-    -- Очистка старых рисунков
     for _, drawing in pairs(Drawings) do
         pcall(function() drawing:Remove() end)
     end
     Drawings = {}
     
-    -- FOV
     DrawFOV()
     
-    -- ===== ESP (ИЗ ВАШЕГО ФАЙЛА) =====
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
@@ -252,7 +227,7 @@ RunService.RenderStepped:Connect(function()
                 if not highlight then
                     highlight = Instance.new("Highlight", character)
                     highlight.Name = "PoloESP"
-                    highlight.FillColor = isVisible and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 255, 0)
+                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
                     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
                     highlight.FillTransparency = 0.3
                     if Settings.ESP_Visible then
@@ -263,19 +238,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== HITBOX EXPAND =====
-    if Settings.Hitbox then
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-                local head = player.Character.Head
-                head.Size = Vector3.new(Settings.HitboxSize, Settings.HitboxSize, Settings.HitboxSize)
-                head.Transparency = 0.5
-                head.CanCollide = false
-            end
-        end
-    end
-    
-    -- ===== TRIGGERBOT (ИЗ ВАШЕГО ФАЙЛА) =====
     if Settings.TriggerBot and canShoot then
         local target = GetTriggerTarget()
         if target then
@@ -288,7 +250,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== AIMBOT (ИЗ ВАШЕГО ФАЙЛА) =====
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         if target then
@@ -300,36 +261,28 @@ RunService.RenderStepped:Connect(function()
                 local deltaX = screenPos.X - mousePos.X
                 local deltaY = screenPos.Y - mousePos.Y
                 
-                if math.abs(deltaX) > 2 or math.abs(deltaY) > 2 then
+                if math.abs(deltaX) > 50 or math.abs(deltaY) > 50 then
                     pcall(function()
-                        local smooth = 1 / Settings.AimbotSmooth
-                        mousemoverel(deltaX / smooth, deltaY / smooth)
+                        mousemoverel(deltaX / 2, deltaY / 2)
                     end)
                 else
                     pcall(function()
-                        mousemoverel(deltaX, deltaY)
+                        mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
                     end)
                 end
             end
         end
     end
     
-    -- ===== МОДЫ НА ОРУЖИЕ (ИЗ ВАШЕГО ФАЙЛА) =====
     if Settings.NoRecoil or Settings.NoSpread or Settings.FastReload then
         ApplyWeaponMods()
     end
 end)
 
--- ===== УВЕДОМЛЕНИЕ =====
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Polo Sniper Arena",
-        Text = "Aimbot (E) + TriggerBot | ВЗЯТО ИЗ ВАШЕГО TXT",
-        Duration = 4
+        Text = "Loaded | Hold E for aimbot",
+        Duration = 3
     })
 end)
-
-print("=== Polo Sniper Arena loaded! ===")
-print("Hold E for aimbot")
-print("TriggerBot: ONLY visible targets")
-print("ВСЕ ФУНКЦИИ ИЗ ВАШЕГО TXT ФАЙЛА")
