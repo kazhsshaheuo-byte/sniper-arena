@@ -1,20 +1,28 @@
--- Polo Sniper Arena - ULTRA AIMBOT (Для Sniper Arena, без отставания + WallCheck)
+-- Polo Sniper Arena - ULTRA FAST (Мгновенный аим + Trigger)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
+-- ===== ADMIN LIST =====
+local AdminIDs = {
+    -- СЮДА ВСТАВИТЬ ВАШИ АЙДИ АДМИНОВ
+    -- Пример: 123456789,
+}
+
+-- ===== НАСТРОЙКИ =====
 local Settings = {
     Aimbot = true,
-    AimbotFOV = 300,
+    AimbotFOV = 350,
     AimbotKey = Enum.KeyCode.E,
-    AimbotWallCheck = true, -- ВКЛЮЧЕНА ПРОВЕРКА СТЕН ДЛЯ АИМБОТА
+    AimbotWallCheck = true,
     
     TriggerBot = true,
-    TriggerDelay = 0.03,
-    TriggerPrecision = 10,
+    TriggerDelay = 0.01,
+    TriggerPrecision = 15,
     
     ESP_Box = true,
     ESP_Visible = true,
@@ -23,26 +31,46 @@ local Settings = {
     NoRecoil = true,
     NoSpread = true,
     FastReload = true,
+    
+    AdminCheck = true,
+    AdminLeave = true,
 }
 
+-- ===== ПЕРЕМЕННЫЕ =====
 local isAimbotKeyPressed = false
 local Drawings = {}
 local canShoot = true
 local currentTarget = nil
+local isGUIOpen = true
 
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Settings.AimbotKey then
-        isAimbotKeyPressed = true
+-- ===== ПРОВЕРКА АДМИНОВ =====
+local function CheckAdmins()
+    if not Settings.AdminCheck then return end
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local userId = player.UserId
+            for _, adminId in pairs(AdminIDs) do
+                if userId == adminId then
+                    if Settings.AdminLeave then
+                        pcall(function()
+                            game:GetService("StarterGui"):SetCore("SendNotification", {
+                                Title = "⚠️ ADMIN DETECTED",
+                                Text = player.Name .. " is an admin! Leaving server...",
+                                Duration = 5
+                            })
+                        end)
+                        wait(1)
+                        game:GetService("TeleportService"):Teleport(game.PlaceId)
+                        return
+                    end
+                end
+            end
+        end
     end
-end)
+end
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Settings.AimbotKey then
-        isAimbotKeyPressed = false
-        currentTarget = nil
-    end
-end)
-
+-- ===== ФУНКЦИИ =====
 local function GetHeadPosition(character)
     local head = character:FindFirstChild("Head")
     if head then
@@ -51,7 +79,6 @@ local function GetHeadPosition(character)
     return nil
 end
 
--- ===== ПРОВЕРКА ВИДИМОСТИ (WALL CHECK) =====
 local function IsPlayerVisible(character)
     if not character or not character:FindFirstChild("Head") then
         return false
@@ -79,6 +106,7 @@ local function IsPlayerVisible(character)
     return false
 end
 
+-- ===== МГНОВЕННЫЙ ТРИГГЕРБОТ =====
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     
@@ -136,13 +164,12 @@ local function GetTriggerTarget()
     return bestTarget
 end
 
--- ===== ПОЛУЧЕНИЕ БЛИЖАЙШЕГО ИГРОКА (С WALL CHECK ДЛЯ АИМА) =====
+-- ===== МГНОВЕННЫЙ АИМ (БЕЗ СГЛАЖИВАНИЯ) =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = math.huge
     local mousePos = UserInputService:GetMouseLocation()
     
-    -- Сначала проверяем текущую цель
     if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("Head") then
         local headPos = GetHeadPosition(currentTarget.Character)
         if headPos then
@@ -150,12 +177,10 @@ local function GetClosestPlayer()
             if onScreen and pos.Z > 0 then
                 local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                 if dist < Settings.AimbotFOV then
-                    -- Проверяем видимость цели
                     if Settings.AimbotWallCheck then
                         if IsPlayerVisible(currentTarget.Character) then
                             return currentTarget
                         else
-                            -- Если цель за стеной, ищем другую
                             currentTarget = nil
                         end
                     else
@@ -170,9 +195,7 @@ local function GetClosestPlayer()
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
             
-            -- ===== WALL CHECK ДЛЯ АИМБОТА =====
             if Settings.AimbotWallCheck then
-                -- ПРОПУСКАЕМ ИГРОКОВ ЗА СТЕНАМИ
                 if not IsPlayerVisible(character) then
                     continue
                 end
@@ -200,13 +223,12 @@ local function GetClosestPlayer()
     return closest
 end
 
--- ===== АИМ ДЛЯ SNIPER ARENA (С WALL CHECK) =====
-local function AimAtHeadSniper(target)
+-- ===== МГНОВЕННОЕ НАВЕДЕНИЕ (ТЕЛЕПОРТ) =====
+local function InstantAim(target)
     if not target or not target.Character then return end
     
     local character = target.Character
     
-    -- Дополнительная проверка видимости перед наведением
     if Settings.AimbotWallCheck then
         if not IsPlayerVisible(character) then
             return
@@ -216,21 +238,19 @@ local function AimAtHeadSniper(target)
     local headPos = GetHeadPosition(character)
     if not headPos then return end
     
+    -- Мгновенный поворот камеры
     local camPos = Camera.CFrame.Position
-    local direction = (headPos - camPos).Unit
     local newCF = CFrame.lookAt(camPos, headPos)
+    Camera.CFrame = newCF
     
-    -- Плавно поворачиваем камеру
-    Camera.CFrame = Camera.CFrame:Lerp(newCF, 0.5)
-    
-    -- Движение мыши (для точности)
+    -- Мгновенное движение мыши
     local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
     if onScreen then
         local mousePos = UserInputService:GetMouseLocation()
         local deltaX = screenPos.X - mousePos.X
         local deltaY = screenPos.Y - mousePos.Y
         
-        if math.abs(deltaX) > 1 or math.abs(deltaY) > 1 then
+        if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
             pcall(function()
                 mousemoverel(deltaX, deltaY)
             end)
@@ -238,7 +258,8 @@ local function AimAtHeadSniper(target)
     end
 end
 
-local function Shoot()
+-- ===== МГНОВЕННЫЙ ВЫСТРЕЛ =====
+local function InstantShoot()
     if not canShoot then return end
     canShoot = false
     
@@ -294,6 +315,230 @@ local function DrawFOV()
     table.insert(Drawings, dot)
 end
 
+-- ===== GUI =====
+local function CreateGUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "PoloGUI"
+    screenGui.Parent = game:GetService("CoreGui")
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 350, 0, 500)
+    mainFrame.Position = UDim2.new(0.5, -175, 0.5, -250)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 15, 50)
+    mainFrame.BackgroundTransparency = 0.95
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = screenGui
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.Position = UDim2.new(0, 0, 0, 0)
+    title.BackgroundColor3 = Color3.fromRGB(100, 40, 180)
+    title.BackgroundTransparency = 0.3
+    title.BorderSizePixel = 0
+    title.Text = "✨ Polo Sniper Arena ✨"
+    title.TextColor3 = Color3.fromRGB(220, 180, 255)
+    title.TextScaled = true
+    title.Font = Enum.Font.GothamBold
+    title.Parent = mainFrame
+    
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeBtn.BackgroundTransparency = 0.5
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.TextSize = 18
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.Parent = mainFrame
+    
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Size = UDim2.new(1, -10, 1, -50)
+    scrollFrame.Position = UDim2.new(0, 5, 0, 45)
+    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.BorderSizePixel = 0
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scrollFrame.ScrollBarThickness = 4
+    scrollFrame.Parent = mainFrame
+    
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 8)
+    listLayout.Parent = scrollFrame
+    
+    local function CreateToggle(text, setting, default)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 0, 35)
+        frame.BackgroundColor3 = Color3.fromRGB(60, 30, 100)
+        frame.BackgroundTransparency = 0.5
+        frame.BorderSizePixel = 0
+        frame.Parent = scrollFrame
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.7, -10, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = Color3.fromRGB(220, 200, 255)
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = frame
+        
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0, 40, 0, 25)
+        btn.Position = UDim2.new(1, -50, 0.5, -12.5)
+        btn.BackgroundColor3 = default and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(60, 30, 100)
+        btn.BorderSizePixel = 0
+        btn.Text = default and "ON" or "OFF"
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.TextSize = 12
+        btn.Font = Enum.Font.GothamBold
+        btn.Parent = frame
+        
+        local state = default
+        btn.MouseButton1Click:Connect(function()
+            state = not state
+            Settings[setting] = state
+            btn.BackgroundColor3 = state and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(60, 30, 100)
+            btn.Text = state and "ON" or "OFF"
+        end)
+        
+        return btn
+    end
+    
+    local function CreateSlider(text, setting, min, max, default)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 0, 45)
+        frame.BackgroundColor3 = Color3.fromRGB(60, 30, 100)
+        frame.BackgroundTransparency = 0.5
+        frame.BorderSizePixel = 0
+        frame.Parent = scrollFrame
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -20, 0, 20)
+        label.Position = UDim2.new(0, 10, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text .. ": " .. tostring(default)
+        label.TextColor3 = Color3.fromRGB(220, 200, 255)
+        label.TextSize = 13
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = frame
+        
+        local slider = Instance.new("Frame")
+        slider.Size = UDim2.new(0.9, 0, 0, 4)
+        slider.Position = UDim2.new(0.05, 0, 0, 28)
+        slider.BackgroundColor3 = Color3.fromRGB(40, 20, 70)
+        slider.BorderSizePixel = 0
+        slider.Parent = frame
+        
+        local fill = Instance.new("Frame")
+        fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+        fill.BackgroundColor3 = Color3.fromRGB(150, 80, 255)
+        fill.BorderSizePixel = 0
+        fill.Parent = slider
+        
+        local dragging = false
+        local value = default
+        
+        local function updateSlider(input)
+            local pos = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
+            value = min + pos * (max - min)
+            value = math.round(value)
+            Settings[setting] = value
+            fill.Size = UDim2.new(pos, 0, 1, 0)
+            label.Text = text .. ": " .. tostring(value)
+        end
+        
+        slider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                updateSlider(input)
+            end
+        end)
+        
+        slider.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+        
+        slider.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                updateSlider(input)
+            end
+        end)
+        
+        return slider
+    end
+    
+    CreateToggle("🎯 Aimbot", "Aimbot", true)
+    CreateSlider("🎯 Aimbot FOV", "AimbotFOV", 50, 500, 350)
+    CreateToggle("🧱 Wall Check", "AimbotWallCheck", true)
+    
+    CreateToggle("🔫 TriggerBot", "TriggerBot", true)
+    CreateSlider("🎯 Trigger Precision", "TriggerPrecision", 5, 30, 15)
+    
+    CreateToggle("👁️ ESP Box", "ESP_Box", true)
+    CreateToggle("👁️ ESP Through Walls", "ESP_Visible", true)
+    
+    CreateToggle("🔧 No Recoil", "NoRecoil", true)
+    CreateToggle("🔧 No Spread", "NoSpread", true)
+    CreateToggle("🔧 Fast Reload", "FastReload", true)
+    
+    CreateToggle("🛡️ Admin Check", "AdminCheck", true)
+    CreateToggle("🚪 Auto Leave on Admin", "AdminLeave", true)
+    
+    local guiOpen = true
+    closeBtn.MouseButton1Click:Connect(function()
+        guiOpen = not guiOpen
+        mainFrame.Visible = guiOpen
+        isGUIOpen = guiOpen
+    end)
+    
+    UserInputService.InputBegan:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.RightShift then
+            guiOpen = not guiOpen
+            mainFrame.Visible = guiOpen
+            isGUIOpen = guiOpen
+        end
+    end)
+    
+    return screenGui
+end
+
+CreateGUI()
+
+-- ===== ПРОВЕРКА АДМИНОВ =====
+spawn(function()
+    while true do
+        wait(3)
+        CheckAdmins()
+    end
+end)
+
+Players.PlayerAdded:Connect(function(player)
+    wait(1)
+    CheckAdmins()
+end)
+
+-- ===== КЛАВИШИ =====
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Settings.AimbotKey then
+        isAimbotKeyPressed = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Settings.AimbotKey then
+        isAimbotKeyPressed = false
+        currentTarget = nil
+    end
+end)
+
+-- ===== ОСНОВНОЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
     for _, drawing in pairs(Drawings) do
         pcall(function() drawing:Remove() end)
@@ -329,22 +574,24 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
+    -- ===== МГНОВЕННЫЙ ТРИГГЕРБОТ =====
     if Settings.TriggerBot and canShoot then
         local target = GetTriggerTarget()
         if target then
             if IsAimingAtHead(target) then
                 local humanoid = target.Character:FindFirstChild("Humanoid")
                 if humanoid and humanoid.Health > 0 then
-                    Shoot()
+                    InstantShoot()
                 end
             end
         end
     end
     
+    -- ===== МГНОВЕННЫЙ АИМ =====
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         if target then
-            AimAtHeadSniper(target)
+            InstantAim(target)
         end
     end
     
@@ -356,10 +603,12 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Polo Sniper Arena",
-        Text = "Aimbot (E) | WallCheck ON",
+        Text = "Press Right Shift for GUI | Hold E for INSTANT aimbot",
         Duration = 3
     })
 end)
 
-print("=== Polo Sniper Arena loaded ===")
-print("Hold E for aimbot | WallCheck: ON")
+print("=== Polo Sniper Arena ULTRA FAST loaded ===")
+print("Press Right Shift to toggle GUI")
+print("Hold E for INSTANT aimbot (телепорт)")
+print("TriggerBot: МГНОВЕННЫЙ")
