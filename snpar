@@ -7,7 +7,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local Settings = {
     Aimbot = true,
-    AimbotSmooth = 0.1,
+    AimbotSmooth = 0.01,
     AimbotFOV = 200,
     ESP_Box = true,
     VisCheck = true
