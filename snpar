@@ -8,13 +8,12 @@ local Mouse = LocalPlayer:GetMouse()
 
 local Settings = {
     Aimbot = true,
-    AimbotSmooth = 1.5,
     AimbotFOV = 350,
     AimbotKey = Enum.KeyCode.E,
     
     TriggerBot = true,
     TriggerDelay = 0.03,
-    TriggerPrecision = 8,
+    TriggerPrecision = 10,
     
     ESP_Box = true,
     ESP_Visible = true,
@@ -28,7 +27,6 @@ local Settings = {
 local isAimbotKeyPressed = false
 local Drawings = {}
 local canShoot = true
-local lastTarget = nil
 
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
@@ -39,7 +37,6 @@ end)
 UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
         isAimbotKeyPressed = false
-        lastTarget = nil
     end
 end)
 
@@ -267,32 +264,20 @@ RunService.RenderStepped:Connect(function()
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         
-        if not target then
-            lastTarget = nil
-            return
-        end
-        
-        lastTarget = target
-        
-        local headPos = GetHeadPosition(target.Character)
-        if headPos then
-            local screenPos = Camera:WorldToViewportPoint(headPos)
-            local mousePos = UserInputService:GetMouseLocation()
-            
-            local deltaX = screenPos.X - mousePos.X
-            local deltaY = screenPos.Y - mousePos.Y
-            
-            local distance = math.sqrt(deltaX * deltaX + deltaY * deltaY)
-            
-            if distance > 3 then
-                local smoothFactor = 1.2
-                if distance > 100 then
-                    smoothFactor = 1
-                end
+        if target then
+            local headPos = GetHeadPosition(target.Character)
+            if headPos then
+                local screenPos = Camera:WorldToViewportPoint(headPos)
+                local mousePos = UserInputService:GetMouseLocation()
                 
-                pcall(function()
-                    mousemoverel(deltaX / smoothFactor, deltaY / smoothFactor)
-                end)
+                local deltaX = screenPos.X - mousePos.X
+                local deltaY = screenPos.Y - mousePos.Y
+                
+                if math.abs(deltaX) > 1 or math.abs(deltaY) > 1 then
+                    pcall(function()
+                        mousemoverel(deltaX, deltaY)
+                    end)
+                end
             end
         end
     end
