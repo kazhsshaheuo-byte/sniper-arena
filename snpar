@@ -1,53 +1,53 @@
--- Polo Sniper Arena - FULL (ESP through walls + Perfect Aimbot + TriggerBot)
+-- Polo Sniper Arena - ULTIMATE (Aimbot + TriggerBot + ESP + FOV + WallCheck)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
+-- ===== SETTINGS =====
 local Settings = {
     Aimbot = true,
     AimbotSmooth = 0.02,
-    AimbotFOV = 300,
-    TriggerBot = true,      -- ВКЛЮЧЕН ТРИГГЕРБОТ
-    TriggerDelay = 0.05,    -- Задержка перед выстрелом (сек)
+    AimbotFOV = 250,
+    AimbotKey = Enum.KeyCode.E,
+    
+    TriggerBot = true,
+    TriggerDelay = 0.05,
+    TriggerPrecision = 15, -- Точность наведения для выстрела
+    
     ESP_Box = true,
-    VisCheck = false
+    ESP_Visible = true, -- ESP через стены
+    
+    WallCheck = true, -- Проверка стен для триггербота
+    NoRecoil = true,
+    NoSpread = true,
+    FastReload = true,
+    
+    Hitbox = true,
+    HitboxSize = 3
 }
 
-local isKeyPressed = false
+-- ===== VARIABLES =====
+local isAimbotKeyPressed = false
 local Drawings = {}
 local canShoot = true
-local lastShotTime = 0
 
--- Клавиша E (Аимбот)
+-- ===== KEY BINDINGS =====
 UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.E then
-        isKeyPressed = true
+    if input.KeyCode == Settings.AimbotKey then
+        isAimbotKeyPressed = true
     end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.E then
-        isKeyPressed = false
+    if input.KeyCode == Settings.AimbotKey then
+        isAimbotKeyPressed = false
     end
 end)
 
--- Функция для клика мышкой (выстрел)
-local function Shoot()
-    if not canShoot then return end
-    canShoot = false
-    
-    pcall(function()
-        mouse1click() -- Нажатие ЛКМ
-    end)
-    
-    -- Задержка перед следующим выстрелом
-    task.wait(Settings.TriggerDelay)
-    canShoot = true
-end
-
--- Получение позиции головы
+-- ===== UTILITY FUNCTIONS =====
 local function GetHeadPosition(character)
     local head = character:FindFirstChild("Head")
     if head then
@@ -56,26 +56,95 @@ local function GetHeadPosition(character)
     return nil
 end
 
--- Проверка, наведен ли прицел на голову (с погрешностью)
+local function IsPlayerVisible(character)
+    if not Settings.WallCheck then return true end
+    if not character or not character:FindFirstChild("Head") then return false end
+    
+    local head = character.Head
+    local origin = Camera.CFrame.Position
+    local direction = (head.Position - origin).Unit * (head.Position - origin).Magnitude
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
+    
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    
+    if not raycastResult then return true end
+    
+    local hitPart = raycastResult.Instance
+    if hitPart and hitPart:IsDescendantOf(character) then
+        return true
+    end
+    
+    return false
+end
+
+-- ===== TRIGGERBOT (из вашего файла) =====
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     
-    local headPos = GetHeadPosition(target.Character)
-    if not headPos then return false end
+    local head = target.Character:FindFirstChild("Head")
+    if not head then return false end
     
-    local screenPos = Camera:WorldToViewportPoint(headPos)
+    local headPos = head.Position
+    local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
+    
+    if not onScreen then return false end
+    
     local mousePos = UserInputService:GetMouseLocation()
-    
-    -- Расстояние от прицела до головы (в пикселях)
     local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
     
-    -- Точность наведения (чем меньше, тем точнее)
-    local AIM_PRECISION = 15 -- Пикселей (можно настроить)
-    
-    return dist < AIM_PRECISION
+    return dist < Settings.TriggerPrecision
 end
 
--- Получение ближайшего игрока
+-- Функция для получения цели для триггербота (с проверкой стен)
+local function GetTriggerTarget()
+    local bestTarget = nil
+    local bestDist = math.huge
+    local mousePos = UserInputService:GetMouseLocation()
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local character = player.Character
+            
+            -- Проверка стен для триггербота
+            if Settings.WallCheck and not IsPlayerVisible(character) then
+                continue -- Пропускаем невидимых
+            end
+            
+            local headPos = GetHeadPosition(character)
+            if headPos then
+                local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+                
+                if onScreen and pos.Z > 0 then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    if dist < bestDist and dist < Settings.AimbotFOV then
+                        bestDist = dist
+                        bestTarget = player
+                    end
+                end
+            end
+        end
+    end
+    
+    return bestTarget
+end
+
+-- ===== SHOOT FUNCTION =====
+local function Shoot()
+    if not canShoot then return end
+    canShoot = false
+    
+    pcall(function()
+        mouse1click()
+    end)
+    
+    task.wait(Settings.TriggerDelay)
+    canShoot = true
+end
+
+-- ===== GET CLOSEST PLAYER (для аимбота) =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = math.huge
@@ -102,43 +171,34 @@ local function GetClosestPlayer()
     return closest
 end
 
--- Получение лучшей цели (для триггербота)
-local function GetTargetForTrigger()
-    local bestTarget = nil
-    local bestDist = math.huge
-    local mousePos = UserInputService:GetMouseLocation()
-    
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            local character = player.Character
-            local headPos = GetHeadPosition(character)
-            
-            if headPos then
-                local pos, onScreen = Camera:WorldToViewportPoint(headPos)
-                
-                if pos.Z > 0 then
-                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                    if dist < bestDist and dist < Settings.AimbotFOV then
-                        bestDist = dist
-                        bestTarget = player
+-- ===== WEAPON MODS =====
+local function ApplyWeaponMods()
+    pcall(function()
+        local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+        if tool then
+            for _, child in pairs(tool:GetDescendants()) do
+                if child:IsA("NumberValue") or child:IsA("DoubleConstrainedValue") or child:IsA("IntValue") then
+                    local name = child.Name:lower()
+                    
+                    if Settings.NoRecoil and (name:find("recoil") or name:find("kick")) then
+                        child.Value = 0
+                    end
+                    
+                    if Settings.NoSpread and (name:find("spread") or name:find("accuracy")) then
+                        child.Value = 0
+                    end
+                    
+                    if Settings.FastReload and name:find("reload") then
+                        child.Value = 0.01
                     end
                 end
             end
         end
-    end
-    
-    return bestTarget, bestDist
+    end)
 end
 
--- Главный цикл
-RunService.RenderStepped:Connect(function()
-    -- Очистка старых рисунков
-    for _, drawing in pairs(Drawings) do
-        pcall(function() drawing:Remove() end)
-    end
-    Drawings = {}
-    
-    -- FOV круг
+-- ===== DRAW FOV CIRCLE =====
+local function DrawFOV()
     local fovCircle = Drawing.new("Circle")
     fovCircle.Visible = true
     fovCircle.Radius = Settings.AimbotFOV
@@ -148,32 +208,72 @@ RunService.RenderStepped:Connect(function()
     fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     table.insert(Drawings, fovCircle)
     
-    -- ESP Box (через стены)
+    -- Crosshair dot
+    local dot = Drawing.new("Circle")
+    dot.Visible = true
+    dot.Radius = 2
+    dot.Color = Color3.fromRGB(255, 0, 0)
+    dot.Filled = true
+    dot.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    table.insert(Drawings, dot)
+end
+
+-- ===== MAIN LOOP =====
+RunService.RenderStepped:Connect(function()
+    -- Clear old drawings
+    for _, drawing in pairs(Drawings) do
+        pcall(function() drawing:Remove() end)
+    end
+    Drawings = {}
+    
+    -- Draw FOV
+    DrawFOV()
+    
+    -- ===== ESP =====
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
+            local isVisible = IsPlayerVisible(character)
+            
+            if not Settings.ESP_Visible and not isVisible then
+                local highlight = character:FindFirstChild("PoloESP")
+                if highlight then highlight:Destroy() end
+                continue
+            end
             
             if Settings.ESP_Box then
                 local highlight = character:FindFirstChild("PoloESP")
                 if not highlight then
                     highlight = Instance.new("Highlight", character)
                     highlight.Name = "PoloESP"
-                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                    highlight.FillColor = isVisible and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 255, 0)
                     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
                     highlight.FillTransparency = 0.3
-                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    if Settings.ESP_Visible then
+                        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    end
                 end
             end
         end
     end
     
-    -- ===== TRIGGERBOT =====
+    -- ===== HITBOX EXPAND =====
+    if Settings.Hitbox then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+                local head = player.Character.Head
+                head.Size = Vector3.new(Settings.HitboxSize, Settings.HitboxSize, Settings.HitboxSize)
+                head.Transparency = 0.5
+                head.CanCollide = false
+            end
+        end
+    end
+    
+    -- ===== TRIGGERBOT (из вашего файла) =====
     if Settings.TriggerBot and canShoot then
-        local target, dist = GetTargetForTrigger()
-        if target and dist then
-            -- Проверяем, точно ли наведен прицел на голову
+        local target = GetTriggerTarget()
+        if target then
             if IsAimingAtHead(target) then
-                -- Проверяем, жив ли игрок
                 local humanoid = target.Character:FindFirstChild("Humanoid")
                 if humanoid and humanoid.Health > 0 then
                     Shoot()
@@ -183,42 +283,47 @@ RunService.RenderStepped:Connect(function()
     end
     
     -- ===== AIMBOT =====
-    if Settings.Aimbot and isKeyPressed then
+    if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         if target then
-            local character = target.Character
-            if character then
-                local headPos = GetHeadPosition(character)
-                if headPos then
-                    local screenPos = Camera:WorldToViewportPoint(headPos)
-                    local mousePos = UserInputService:GetMouseLocation()
-                    
-                    local deltaX = screenPos.X - mousePos.X
-                    local deltaY = screenPos.Y - mousePos.Y
-                    
-                    if math.abs(deltaX) > 3 or math.abs(deltaY) > 3 then
-                        pcall(function()
-                            mousemoverel(deltaX * 0.9, deltaY * 0.9)
-                        end)
-                    else
-                        pcall(function()
-                            mousemoverel(deltaX, deltaY)
-                        end)
-                    end
+            local headPos = GetHeadPosition(target.Character)
+            if headPos then
+                local screenPos = Camera:WorldToViewportPoint(headPos)
+                local mousePos = UserInputService:GetMouseLocation()
+                
+                local deltaX = screenPos.X - mousePos.X
+                local deltaY = screenPos.Y - mousePos.Y
+                
+                if math.abs(deltaX) > 2 or math.abs(deltaY) > 2 then
+                    pcall(function()
+                        local smooth = 1 / Settings.AimbotSmooth
+                        mousemoverel(deltaX / smooth, deltaY / smooth)
+                    end)
+                else
+                    pcall(function()
+                        mousemoverel(deltaX, deltaY)
+                    end)
                 end
             end
         end
     end
+    
+    -- ===== WEAPON MODS =====
+    if Settings.NoRecoil or Settings.NoSpread or Settings.FastReload then
+        ApplyWeaponMods()
+    end
 end)
 
--- Уведомление
+-- ===== NOTIFICATION =====
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Polo Sniper Arena FULL",
-        Text = "ESP + Aimbot + TriggerBot | Hold E for aimbot",
-        Duration = 3
+        Title = "Polo Sniper Arena ULTIMATE",
+        Text = "ESP + Aimbot (E) + TriggerBot | WallCheck ON",
+        Duration = 4
     })
 end)
 
-print("Polo Sniper Arena FULL loaded!")
-print("ESP through walls | Hold E for aimbot | Auto-shoot on head")
+print("=== Polo Sniper Arena ULTIMATE loaded! ===")
+print("Hold E for aimbot")
+print("Auto-shoot on head (TriggerBot)")
+print("ESP through walls")
