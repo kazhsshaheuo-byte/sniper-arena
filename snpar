@@ -1,4 +1,4 @@
--- Polo Sniper Arena - Optimized for Solara v3
+-- Polo Sniper Arena - FULL (ESP through walls + Perfect Aimbot + TriggerBot)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -7,17 +7,20 @@ local LocalPlayer = Players.LocalPlayer
 
 local Settings = {
     Aimbot = true,
-    AimbotSmooth = 0.01,
-    AimbotFOV = 200,
+    AimbotSmooth = 0.02,
+    AimbotFOV = 300,
+    TriggerBot = true,      -- ВКЛЮЧЕН ТРИГГЕРБОТ
+    TriggerDelay = 0.05,    -- Задержка перед выстрелом (сек)
     ESP_Box = true,
-    VisCheck = true
+    VisCheck = false
 }
 
 local isKeyPressed = false
 local Drawings = {}
-local ESPObjects = {}
+local canShoot = true
+local lastShotTime = 0
 
--- Перехват клавиши E
+-- Клавиша E (Аимбот)
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.E then
         isKeyPressed = true
@@ -30,32 +33,46 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Проверка видимости
-local function IsPlayerVisible(character)
-    if not character or not character:FindFirstChild("Head") then
-        return false
+-- Функция для клика мышкой (выстрел)
+local function Shoot()
+    if not canShoot then return end
+    canShoot = false
+    
+    pcall(function()
+        mouse1click() -- Нажатие ЛКМ
+    end)
+    
+    -- Задержка перед следующим выстрелом
+    task.wait(Settings.TriggerDelay)
+    canShoot = true
+end
+
+-- Получение позиции головы
+local function GetHeadPosition(character)
+    local head = character:FindFirstChild("Head")
+    if head then
+        return head.Position
     end
+    return nil
+end
+
+-- Проверка, наведен ли прицел на голову (с погрешностью)
+local function IsAimingAtHead(target)
+    if not target or not target.Character then return false end
     
-    local head = character.Head
-    local origin = Camera.CFrame.Position
-    local direction = (head.Position - origin).Unit * (head.Position - origin).Magnitude
+    local headPos = GetHeadPosition(target.Character)
+    if not headPos then return false end
     
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
+    local screenPos = Camera:WorldToViewportPoint(headPos)
+    local mousePos = UserInputService:GetMouseLocation()
     
-    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    -- Расстояние от прицела до головы (в пикселях)
+    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
     
-    if not raycastResult then
-        return true
-    end
+    -- Точность наведения (чем меньше, тем точнее)
+    local AIM_PRECISION = 15 -- Пикселей (можно настроить)
     
-    local hitPart = raycastResult.Instance
-    if hitPart and hitPart:IsDescendantOf(character) then
-        return true
-    end
-    
-    return false
+    return dist < AIM_PRECISION
 end
 
 -- Получение ближайшего игрока
@@ -67,19 +84,17 @@ local function GetClosestPlayer()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
-            local head = character.Head
+            local headPos = GetHeadPosition(character)
             
-            if Settings.VisCheck and not IsPlayerVisible(character) then
-                continue
-            end
-            
-            local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
-            
-            if onScreen then
-                local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                if dist < closestDist and dist < Settings.AimbotFOV then
-                    closestDist = dist
-                    closest = player
+            if headPos then
+                local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+                
+                if pos.Z > 0 then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    if dist < closestDist and dist < Settings.AimbotFOV then
+                        closestDist = dist
+                        closest = player
+                    end
                 end
             end
         end
@@ -87,105 +102,123 @@ local function GetClosestPlayer()
     return closest
 end
 
--- Функция для безопасного создания Drawing (для Solara)
-local function CreateDrawing(drawingType)
-    local success, result = pcall(function()
-        return Drawing.new(drawingType)
-    end)
-    if success then
-        return result
-    else
-        return nil
+-- Получение лучшей цели (для триггербота)
+local function GetTargetForTrigger()
+    local bestTarget = nil
+    local bestDist = math.huge
+    local mousePos = UserInputService:GetMouseLocation()
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local character = player.Character
+            local headPos = GetHeadPosition(character)
+            
+            if headPos then
+                local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+                
+                if pos.Z > 0 then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    if dist < bestDist and dist < Settings.AimbotFOV then
+                        bestDist = dist
+                        bestTarget = player
+                    end
+                end
+            end
+        end
     end
+    
+    return bestTarget, bestDist
 end
 
 -- Главный цикл
 RunService.RenderStepped:Connect(function()
     -- Очистка старых рисунков
     for _, drawing in pairs(Drawings) do
-        pcall(function()
-            drawing:Remove()
-        end)
+        pcall(function() drawing:Remove() end)
     end
     Drawings = {}
     
-    -- Рисуем FOV круг (если поддерживается)
-    local fovCircle = CreateDrawing("Circle")
-    if fovCircle then
-        fovCircle.Visible = true
-        fovCircle.Radius = Settings.AimbotFOV
-        fovCircle.Thickness = 2
-        fovCircle.Color = Color3.fromRGB(255, 255, 255)
-        fovCircle.Filled = false
-        fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-        table.insert(Drawings, fovCircle)
-    end
+    -- FOV круг
+    local fovCircle = Drawing.new("Circle")
+    fovCircle.Visible = true
+    fovCircle.Radius = Settings.AimbotFOV
+    fovCircle.Thickness = 2
+    fovCircle.Color = Color3.fromRGB(255, 255, 255)
+    fovCircle.Filled = false
+    fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    table.insert(Drawings, fovCircle)
     
-    -- ESP Box (используем Highlight)
+    -- ESP Box (через стены)
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
             
-            if Settings.VisCheck and not IsPlayerVisible(character) then
-                local highlight = character:FindFirstChild("PoloESP")
-                if highlight then
-                    pcall(function()
-                        highlight:Destroy()
-                    end)
-                end
-                continue
-            end
-            
             if Settings.ESP_Box then
                 local highlight = character:FindFirstChild("PoloESP")
                 if not highlight then
-                    pcall(function()
-                        highlight = Instance.new("Highlight", character)
-                        highlight.Name = "PoloESP"
-                        highlight.FillColor = Color3.fromRGB(255, 0, 0)
-                        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                        highlight.FillTransparency = 0.5
-                        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    end)
+                    highlight = Instance.new("Highlight", character)
+                    highlight.Name = "PoloESP"
+                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    highlight.FillTransparency = 0.3
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
                 end
             end
         end
     end
     
-    -- Аимбот
+    -- ===== TRIGGERBOT =====
+    if Settings.TriggerBot and canShoot then
+        local target, dist = GetTargetForTrigger()
+        if target and dist then
+            -- Проверяем, точно ли наведен прицел на голову
+            if IsAimingAtHead(target) then
+                -- Проверяем, жив ли игрок
+                local humanoid = target.Character:FindFirstChild("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    Shoot()
+                end
+            end
+        end
+    end
+    
+    -- ===== AIMBOT =====
     if Settings.Aimbot and isKeyPressed then
         local target = GetClosestPlayer()
         if target then
-            local headPos = target.Character.Head.Position
-            local screenPos = Camera:WorldToViewportPoint(headPos)
-            local mousePos = UserInputService:GetMouseLocation()
-            
-            local deltaX = screenPos.X - mousePos.X
-            local deltaY = screenPos.Y - mousePos.Y
-            
-            -- Для Solara используем mouse_move с небольшим delay
-            if math.abs(deltaX) > 1 or math.abs(deltaY) > 1 then
-                pcall(function()
-                    if Settings.AimbotSmooth > 0 then
-                        local smoothFactor = 1 / Settings.AimbotSmooth
-                        mousemoverel(deltaX / smoothFactor, deltaY / smoothFactor)
+            local character = target.Character
+            if character then
+                local headPos = GetHeadPosition(character)
+                if headPos then
+                    local screenPos = Camera:WorldToViewportPoint(headPos)
+                    local mousePos = UserInputService:GetMouseLocation()
+                    
+                    local deltaX = screenPos.X - mousePos.X
+                    local deltaY = screenPos.Y - mousePos.Y
+                    
+                    if math.abs(deltaX) > 3 or math.abs(deltaY) > 3 then
+                        pcall(function()
+                            mousemoverel(deltaX * 0.9, deltaY * 0.9)
+                        end)
                     else
-                        mousemoverel(deltaX, deltaY)
+                        pcall(function()
+                            mousemoverel(deltaX, deltaY)
+                        end)
                     end
-                end)
+                end
             end
         end
     end
 end)
 
--- Уведомление для Solara
+-- Уведомление
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Polo Sniper Arena",
-        Text = "Loaded! Hold E for aimbot | Solara v3",
+        Title = "Polo Sniper Arena FULL",
+        Text = "ESP + Aimbot + TriggerBot | Hold E for aimbot",
         Duration = 3
     })
 end)
 
-print("Polo Sniper Arena loaded successfully!")
-print("Hold E key for aimbot")
+print("Polo Sniper Arena FULL loaded!")
+print("ESP through walls | Hold E for aimbot | Auto-shoot on head")
