@@ -1,4 +1,4 @@
--- Polo Sniper Arena - ULTRA FAST (Мгновенный аим + Trigger + GUI с вкладками)
+-- Polo Sniper Arena - ULTRA GUI (Красивое + Сохранение + Перетаскивание)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,21 +13,18 @@ local AdminIDs = {
     -- Пример: 123456789,
 }
 
--- ===== НАСТРОЙКИ =====
-local Settings = {
-    -- AIMBOT
+-- ===== НАСТРОЙКИ ПО УМОЛЧАНИЮ =====
+local DefaultSettings = {
     Aimbot = true,
     AimbotFOV = 350,
     AimbotKey = Enum.KeyCode.E,
     AimbotWallCheck = true,
-    AimbotSmooth = 1, -- 1 = мгновенно, больше = плавнее
+    AimbotSmooth = 1,
     
-    -- TRIGGER
     TriggerBot = true,
     TriggerDelay = 0.01,
     TriggerPrecision = 15,
     
-    -- VISUALS
     ESP_Box = true,
     ESP_Visible = true,
     ESP_Skeleton = false,
@@ -35,15 +32,47 @@ local Settings = {
     ESP_Distance = false,
     ESP_TeamCheck = false,
     
-    -- WEAPON
     NoRecoil = true,
     NoSpread = true,
     FastReload = true,
     
-    -- ADMIN
     AdminCheck = true,
     AdminLeave = true,
 }
+
+-- ===== ЗАГРУЗКА/СОХРАНЕНИЕ НАСТРОЕК =====
+local function SaveSettings()
+    local data = {}
+    for key, value in pairs(Settings) do
+        if typeof(value) == "EnumItem" then
+            data[key] = tostring(value)
+        else
+            data[key] = value
+        end
+    end
+    pcall(function()
+        writefile("PoloSniperSettings.txt", game:GetService("HttpService"):JSONEncode(data))
+    end)
+end
+
+local function LoadSettings()
+    pcall(function()
+        local data = game:GetService("HttpService"):JSONDecode(readfile("PoloSniperSettings.txt"))
+        for key, value in pairs(data) do
+            if key == "AimbotKey" then
+                Settings[key] = Enum.KeyCode[value:match("%.(%w+)")]
+            else
+                Settings[key] = value
+            end
+        end
+    end)
+end
+
+local Settings = {}
+for key, value in pairs(DefaultSettings) do
+    Settings[key] = value
+end
+LoadSettings()
 
 -- ===== ПЕРЕМЕННЫЕ =====
 local isAimbotKeyPressed = false
@@ -52,6 +81,9 @@ local canShoot = true
 local currentTarget = nil
 local isGUIOpen = true
 local currentTab = "Aimbot"
+local isDragging = false
+local dragStart = nil
+local dragOffset = nil
 
 -- ===== ПРОВЕРКА АДМИНОВ =====
 local function CheckAdmins()
@@ -317,6 +349,97 @@ local function ApplyWeaponMods()
     end)
 end
 
+-- ===== ESP SKELETON =====
+local function DrawSkeleton(character)
+    if not character then return end
+    
+    local parts = {
+        Head = "Head",
+        UpperTorso = "UpperTorso",
+        LowerTorso = "LowerTorso",
+        LeftArm = "LeftArm",
+        RightArm = "RightArm",
+        LeftLeg = "LeftLeg",
+        RightLeg = "RightLeg",
+    }
+    
+    local function getPart(name)
+        return character:FindFirstChild(name) or character:FindFirstChild(name:lower())
+    end
+    
+    local function drawLine(part1, part2, color)
+        if not part1 or not part2 then return end
+        local pos1, vis1 = Camera:WorldToViewportPoint(part1.Position)
+        local pos2, vis2 = Camera:WorldToViewportPoint(part2.Position)
+        if vis1 and vis2 then
+            local line = Drawing.new("Line")
+            line.Visible = true
+            line.From = Vector2.new(pos1.X, pos1.Y)
+            line.To = Vector2.new(pos2.X, pos2.Y)
+            line.Color = color or Color3.fromRGB(150, 80, 255)
+            line.Thickness = 2
+            table.insert(Drawings, line)
+        end
+    end
+    
+    local head = getPart("Head")
+    local upper = getPart("UpperTorso") or getPart("Torso")
+    local lower = getPart("LowerTorso")
+    local lArm = getPart("LeftArm")
+    local rArm = getPart("RightArm")
+    local lLeg = getPart("LeftLeg")
+    local rLeg = getPart("RightLeg")
+    
+    local color = Color3.fromRGB(150, 80, 255)
+    
+    if upper and head then drawLine(upper, head, color) end
+    if upper and lower then drawLine(upper, lower, color) end
+    if upper and lArm then drawLine(upper, lArm, color) end
+    if upper and rArm then drawLine(upper, rArm, color) end
+    if lower and lLeg then drawLine(lower, lLeg, color) end
+    if lower and rLeg then drawLine(lower, rLeg, color) end
+end
+
+-- ===== ESP DISTANCE =====
+local function DrawDistance(character)
+    if not character or not character:FindFirstChild("Head") then return end
+    
+    local head = character.Head
+    local dist = (Camera.CFrame.Position - head.Position).Magnitude
+    local pos, onScreen = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 2, 0))
+    
+    if onScreen then
+        local text = Drawing.new("Text")
+        text.Visible = true
+        text.Position = Vector2.new(pos.X, pos.Y)
+        text.Text = math.round(dist) .. "m"
+        text.Color = Color3.fromRGB(255, 255, 255)
+        text.Size = 14
+        text.Center = true
+        text.Outline = true
+        text.OutlineColor = Color3.fromRGB(0, 0, 0)
+        table.insert(Drawings, text)
+    end
+end
+
+-- ===== ESP LINE =====
+local function DrawLineToPlayer(character)
+    if not character or not character:FindFirstChild("Head") then return end
+    
+    local head = character.Head
+    local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+    
+    if onScreen then
+        local line = Drawing.new("Line")
+        line.Visible = true
+        line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+        line.To = Vector2.new(pos.X, pos.Y)
+        line.Color = Color3.fromRGB(150, 80, 255)
+        line.Thickness = 1
+        table.insert(Drawings, line)
+    end
+end
+
 local function DrawFOV()
     local fovCircle = Drawing.new("Circle")
     fovCircle.Visible = true
@@ -326,17 +449,9 @@ local function DrawFOV()
     fovCircle.Filled = false
     fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     table.insert(Drawings, fovCircle)
-    
-    local dot = Drawing.new("Circle")
-    dot.Visible = true
-    dot.Radius = 2
-    dot.Color = Color3.fromRGB(255, 0, 0)
-    dot.Filled = true
-    dot.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    table.insert(Drawings, dot)
 end
 
--- ===== СОЗДАНИЕ GUI С ВКЛАДКАМИ =====
+-- ===== GUI =====
 local function CreateGUI()
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "PoloGUI"
@@ -345,30 +460,52 @@ local function CreateGUI()
     -- Main Frame
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 400, 0, 520)
-    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -260)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 10, 35)
-    mainFrame.BackgroundTransparency = 0.05
+    mainFrame.Size = UDim2.new(0, 420, 0, 540)
+    mainFrame.Position = UDim2.new(0.5, -210, 0.5, -270)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(15, 8, 25)
+    mainFrame.BackgroundTransparency = 0.03
     mainFrame.BorderSizePixel = 0
     mainFrame.Parent = screenGui
     
-    -- Заголовок
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.Position = UDim2.new(0, 0, 0, 0)
-    title.BackgroundColor3 = Color3.fromRGB(100, 40, 180)
-    title.BackgroundTransparency = 0.2
-    title.BorderSizePixel = 0
-    title.Text = "✨ Polo Sniper Arena ✨"
-    title.TextColor3 = Color3.fromRGB(220, 180, 255)
-    title.TextScaled = true
-    title.Font = Enum.Font.GothamBold
-    title.Parent = mainFrame
+    -- Shadow/Glow
+    local glow = Instance.new("Frame")
+    glow.Size = UDim2.new(1, 6, 1, 6)
+    glow.Position = UDim2.new(0, -3, 0, -3)
+    glow.BackgroundColor3 = Color3.fromRGB(100, 40, 180)
+    glow.BackgroundTransparency = 0.5
+    glow.BorderSizePixel = 0
+    glow.Parent = mainFrame
     
-    -- Кнопка закрытия
+    -- Corner
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = mainFrame
+    
+    -- Title Bar (для перетаскивания)
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 45)
+    titleBar.Position = UDim2.new(0, 0, 0, 0)
+    titleBar.BackgroundColor3 = Color3.fromRGB(100, 40, 180)
+    titleBar.BackgroundTransparency = 0.15
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = mainFrame
+    
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(0.8, 0, 1, 0)
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "✨ Polo Sniper Arena ✨"
+    title.TextColor3 = Color3.fromRGB(230, 200, 255)
+    title.TextSize = 18
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Font = Enum.Font.GothamBold
+    title.Parent = titleBar
+    
+    -- Close Button
     local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.Size = UDim2.new(0, 32, 0, 32)
+    closeBtn.Position = UDim2.new(1, -37, 0.5, -16)
     closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     closeBtn.BackgroundTransparency = 0.3
     closeBtn.BorderSizePixel = 0
@@ -376,14 +513,48 @@ local function CreateGUI()
     closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeBtn.TextSize = 18
     closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.Parent = mainFrame
+    closeBtn.Parent = titleBar
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 8)
+    closeCorner.Parent = closeBtn
+    
+    -- ===== ПЕРЕТАСКИВАНИЕ =====
+    local dragStart = nil
+    local dragOffset = nil
+    
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+            dragStart = input.Position
+            dragOffset = mainFrame.Position
+        end
+    end)
+    
+    titleBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = false
+        end
+    end)
+    
+    titleBar.InputChanged:Connect(function(input)
+        if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(
+                dragOffset.X.Scale,
+                dragOffset.X.Offset + delta.X,
+                dragOffset.Y.Scale,
+                dragOffset.Y.Offset + delta.Y
+            )
+        end
+    end)
     
     -- ===== ВКЛАДКИ =====
     local tabFrame = Instance.new("Frame")
-    tabFrame.Size = UDim2.new(1, 0, 0, 35)
-    tabFrame.Position = UDim2.new(0, 0, 0, 40)
+    tabFrame.Size = UDim2.new(1, 0, 0, 38)
+    tabFrame.Position = UDim2.new(0, 0, 0, 45)
     tabFrame.BackgroundColor3 = Color3.fromRGB(40, 20, 70)
-    tabFrame.BackgroundTransparency = 0.3
+    tabFrame.BackgroundTransparency = 0.5
     tabFrame.BorderSizePixel = 0
     tabFrame.Parent = mainFrame
     
@@ -395,8 +566,8 @@ local function CreateGUI()
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1 / #tabs, -2, 1, -2)
         btn.Position = UDim2.new((i - 1) / #tabs, 1, 0, 1)
-        btn.BackgroundColor3 = i == 1 and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(40, 20, 70)
-        btn.BackgroundTransparency = 0.3
+        btn.BackgroundColor3 = i == 1 and Color3.fromRGB(120, 50, 220) or Color3.fromRGB(40, 20, 70)
+        btn.BackgroundTransparency = 0.2
         btn.BorderSizePixel = 0
         btn.Text = tabName
         btn.TextColor3 = Color3.fromRGB(220, 200, 255)
@@ -404,12 +575,16 @@ local function CreateGUI()
         btn.Font = Enum.Font.GothamBold
         btn.Parent = tabFrame
         
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 6)
+        btnCorner.Parent = btn
+        
         tabButtons[i] = btn
         
         -- Контент вкладки
         local content = Instance.new("ScrollingFrame")
-        content.Size = UDim2.new(1, -10, 1, -85)
-        content.Position = UDim2.new(0, 5, 0, 80)
+        content.Size = UDim2.new(1, -10, 1, -88)
+        content.Position = UDim2.new(0, 5, 0, 88)
         content.BackgroundTransparency = 1
         content.BorderSizePixel = 0
         content.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -418,7 +593,7 @@ local function CreateGUI()
         content.Parent = mainFrame
         
         local listLayout = Instance.new("UIListLayout")
-        listLayout.Padding = UDim.new(0, 6)
+        listLayout.Padding = UDim.new(0, 8)
         listLayout.Parent = content
         
         tabContents[i] = content
@@ -426,7 +601,7 @@ local function CreateGUI()
         btn.MouseButton1Click:Connect(function()
             for j, tab in ipairs(tabContents) do
                 tab.Visible = (j == i)
-                tabButtons[j].BackgroundColor3 = (j == i) and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(40, 20, 70)
+                tabButtons[j].BackgroundColor3 = (j == i) and Color3.fromRGB(120, 50, 220) or Color3.fromRGB(40, 20, 70)
             end
             currentTab = tabName
         end)
@@ -435,40 +610,49 @@ local function CreateGUI()
     -- ===== ФУНКЦИИ СОЗДАНИЯ ЭЛЕМЕНТОВ =====
     local function CreateToggle(parent, text, setting, default)
         local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, -10, 0, 32)
+        frame.Size = UDim2.new(1, -10, 0, 36)
         frame.BackgroundColor3 = Color3.fromRGB(60, 30, 100)
-        frame.BackgroundTransparency = 0.6
+        frame.BackgroundTransparency = 0.5
         frame.BorderSizePixel = 0
         frame.Parent = parent
         
+        local frameCorner = Instance.new("UICorner")
+        frameCorner.CornerRadius = UDim.new(0, 8)
+        frameCorner.Parent = frame
+        
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(0.7, -10, 1, 0)
-        label.Position = UDim2.new(0, 10, 0, 0)
+        label.Position = UDim2.new(0, 12, 0, 0)
         label.BackgroundTransparency = 1
         label.Text = text
-        label.TextColor3 = Color3.fromRGB(220, 200, 255)
-        label.TextSize = 13
+        label.TextColor3 = Color3.fromRGB(230, 210, 255)
+        label.TextSize = 14
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Font = Enum.Font.Gotham
         label.Parent = frame
         
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 40, 0, 24)
-        btn.Position = UDim2.new(1, -45, 0.5, -12)
-        btn.BackgroundColor3 = default and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(60, 30, 100)
+        btn.Size = UDim2.new(0, 50, 0, 28)
+        btn.Position = UDim2.new(1, -55, 0.5, -14)
+        btn.BackgroundColor3 = default and Color3.fromRGB(130, 60, 230) or Color3.fromRGB(60, 30, 100)
         btn.BorderSizePixel = 0
         btn.Text = default and "ON" or "OFF"
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.TextSize = 11
+        btn.TextSize = 12
         btn.Font = Enum.Font.GothamBold
         btn.Parent = frame
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 6)
+        btnCorner.Parent = btn
         
         local state = default
         btn.MouseButton1Click:Connect(function()
             state = not state
             Settings[setting] = state
-            btn.BackgroundColor3 = state and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(60, 30, 100)
+            btn.BackgroundColor3 = state and Color3.fromRGB(130, 60, 230) or Color3.fromRGB(60, 30, 100)
             btn.Text = state and "ON" or "OFF"
+            SaveSettings()
         end)
         
         return btn
@@ -476,35 +660,47 @@ local function CreateGUI()
     
     local function CreateSlider(parent, text, setting, min, max, default)
         local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, -10, 0, 40)
+        frame.Size = UDim2.new(1, -10, 0, 50)
         frame.BackgroundColor3 = Color3.fromRGB(60, 30, 100)
-        frame.BackgroundTransparency = 0.6
+        frame.BackgroundTransparency = 0.5
         frame.BorderSizePixel = 0
         frame.Parent = parent
         
+        local frameCorner = Instance.new("UICorner")
+        frameCorner.CornerRadius = UDim.new(0, 8)
+        frameCorner.Parent = frame
+        
         local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -20, 0, 18)
-        label.Position = UDim2.new(0, 10, 0, 0)
+        label.Size = UDim2.new(1, -20, 0, 22)
+        label.Position = UDim2.new(0, 12, 0, 0)
         label.BackgroundTransparency = 1
         label.Text = text .. ": " .. tostring(default)
-        label.TextColor3 = Color3.fromRGB(220, 200, 255)
-        label.TextSize = 12
+        label.TextColor3 = Color3.fromRGB(230, 210, 255)
+        label.TextSize = 13
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Font = Enum.Font.Gotham
         label.Parent = frame
         
         local slider = Instance.new("Frame")
-        slider.Size = UDim2.new(0.85, 0, 0, 4)
-        slider.Position = UDim2.new(0.05, 0, 0, 26)
+        slider.Size = UDim2.new(0.85, 0, 0, 6)
+        slider.Position = UDim2.new(0.05, 0, 0, 32)
         slider.BackgroundColor3 = Color3.fromRGB(40, 20, 70)
         slider.BorderSizePixel = 0
         slider.Parent = frame
         
+        local sliderCorner = Instance.new("UICorner")
+        sliderCorner.CornerRadius = UDim.new(0, 3)
+        sliderCorner.Parent = slider
+        
         local fill = Instance.new("Frame")
         fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-        fill.BackgroundColor3 = Color3.fromRGB(150, 80, 255)
+        fill.BackgroundColor3 = Color3.fromRGB(160, 80, 255)
         fill.BorderSizePixel = 0
         fill.Parent = slider
+        
+        local fillCorner = Instance.new("UICorner")
+        fillCorner.CornerRadius = UDim.new(0, 3)
+        fillCorner.Parent = fill
         
         local dragging = false
         local value = default
@@ -512,10 +708,15 @@ local function CreateGUI()
         local function updateSlider(input)
             local pos = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
             value = min + pos * (max - min)
-            value = math.round(value)
+            if setting == "TriggerDelay" then
+                value = math.round(value * 100) / 100
+            else
+                value = math.round(value)
+            end
             Settings[setting] = value
             fill.Size = UDim2.new(pos, 0, 1, 0)
             label.Text = text .. ": " .. tostring(value)
+            SaveSettings()
         end
         
         slider.InputBegan:Connect(function(input)
@@ -541,31 +742,32 @@ local function CreateGUI()
     end
     
     -- ===== ВКЛАДКА AIMBOT =====
-    CreateToggle(tabContents[1], "🎯 Aimbot", "Aimbot", true)
-    CreateSlider(tabContents[1], "🎯 FOV", "AimbotFOV", 50, 500, 350)
-    CreateSlider(tabContents[1], "🎯 Smoothness", "AimbotSmooth", 1, 10, 1)
-    CreateToggle(tabContents[1], "🧱 Wall Check", "AimbotWallCheck", true)
+    CreateToggle(tabContents[1], "🎯 Aimbot", "Aimbot", Settings.Aimbot)
+    CreateSlider(tabContents[1], "🎯 FOV", "AimbotFOV", 50, 500, Settings.AimbotFOV)
+    CreateSlider(tabContents[1], "🎯 Smoothness", "AimbotSmooth", 1, 10, Settings.AimbotSmooth)
+    CreateToggle(tabContents[1], "🧱 Wall Check", "AimbotWallCheck", Settings.AimbotWallCheck)
     
     -- ===== ВКЛАДКА TRIGGER =====
-    CreateToggle(tabContents[2], "🔫 TriggerBot", "TriggerBot", true)
-    CreateSlider(tabContents[2], "🎯 Precision", "TriggerPrecision", 5, 40, 15)
-    CreateSlider(tabContents[2], "⏱️ Delay (sec)", "TriggerDelay", 1, 20, 1)
+    CreateToggle(tabContents[2], "🔫 TriggerBot", "TriggerBot", Settings.TriggerBot)
+    CreateSlider(tabContents[2], "🎯 Precision", "TriggerPrecision", 5, 40, Settings.TriggerPrecision)
+    CreateSlider(tabContents[2], "⏱️ Delay (sec)", "TriggerDelay", 1, 20, Settings.TriggerDelay * 100)
     
     -- ===== ВКЛАДКА VISUALS =====
-    CreateToggle(tabContents[3], "📦 ESP Box", "ESP_Box", true)
-    CreateToggle(tabContents[3], "👻 Through Walls", "ESP_Visible", true)
-    CreateToggle(tabContents[3], "🦴 Skeleton", "ESP_Skeleton", false)
-    CreateToggle(tabContents[3], "📏 Distance", "ESP_Distance", false)
-    CreateToggle(tabContents[3], "🚫 Team Check", "ESP_TeamCheck", false)
+    CreateToggle(tabContents[3], "📦 ESP Box", "ESP_Box", Settings.ESP_Box)
+    CreateToggle(tabContents[3], "👻 Through Walls", "ESP_Visible", Settings.ESP_Visible)
+    CreateToggle(tabContents[3], "🦴 Skeleton", "ESP_Skeleton", Settings.ESP_Skeleton)
+    CreateToggle(tabContents[3], "📏 Distance", "ESP_Distance", Settings.ESP_Distance)
+    CreateToggle(tabContents[3], "📐 Line", "ESP_Line", Settings.ESP_Line)
+    CreateToggle(tabContents[3], "🚫 Team Check", "ESP_TeamCheck", Settings.ESP_TeamCheck)
     
     -- ===== ВКЛАДКА WEAPON =====
-    CreateToggle(tabContents[4], "🔫 No Recoil", "NoRecoil", true)
-    CreateToggle(tabContents[4], "🎯 No Spread", "NoSpread", true)
-    CreateToggle(tabContents[4], "⚡ Fast Reload", "FastReload", true)
+    CreateToggle(tabContents[4], "🔫 No Recoil", "NoRecoil", Settings.NoRecoil)
+    CreateToggle(tabContents[4], "🎯 No Spread", "NoSpread", Settings.NoSpread)
+    CreateToggle(tabContents[4], "⚡ Fast Reload", "FastReload", Settings.FastReload)
     
     -- ===== ВКЛАДКА ADMIN =====
-    CreateToggle(tabContents[5], "🛡️ Admin Check", "AdminCheck", true)
-    CreateToggle(tabContents[5], "🚪 Auto Leave", "AdminLeave", true)
+    CreateToggle(tabContents[5], "🛡️ Admin Check", "AdminCheck", Settings.AdminCheck)
+    CreateToggle(tabContents[5], "🚪 Auto Leave", "AdminLeave", Settings.AdminLeave)
     
     -- Кнопка закрытия
     local guiOpen = true
@@ -653,6 +855,18 @@ RunService.RenderStepped:Connect(function()
                     end
                 end
             end
+            
+            if Settings.ESP_Skeleton then
+                DrawSkeleton(character)
+            end
+            
+            if Settings.ESP_Distance then
+                DrawDistance(character)
+            end
+            
+            if Settings.ESP_Line then
+                DrawLineToPlayer(character)
+            end
         end
     end
     
@@ -683,11 +897,12 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Polo Sniper Arena",
-        Text = "Right Shift - GUI | E - Aimbot",
+        Text = "Right Shift - GUI | E - Aimbot | Drag to move",
         Duration = 3
     })
 end)
 
-print("=== Polo Sniper Arena ULTRA FAST loaded ===")
+print("=== Polo Sniper Arena ULTRA GUI loaded ===")
 print("Right Shift - toggle GUI")
 print("E - hold for aimbot")
+print("Drag title bar to move GUI")
