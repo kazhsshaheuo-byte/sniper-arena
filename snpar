@@ -1,4 +1,4 @@
--- Polo Sniper Arena - ULTRA FAST (Мгновенный аим + Trigger)
+-- Polo Sniper Arena - ULTRA FAST (Мгновенный аим + Trigger + GUI с вкладками)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -15,23 +15,32 @@ local AdminIDs = {
 
 -- ===== НАСТРОЙКИ =====
 local Settings = {
+    -- AIMBOT
     Aimbot = true,
     AimbotFOV = 350,
     AimbotKey = Enum.KeyCode.E,
     AimbotWallCheck = true,
+    AimbotSmooth = 1, -- 1 = мгновенно, больше = плавнее
     
+    -- TRIGGER
     TriggerBot = true,
     TriggerDelay = 0.01,
     TriggerPrecision = 15,
     
+    -- VISUALS
     ESP_Box = true,
     ESP_Visible = true,
-    WallCheck = true,
+    ESP_Skeleton = false,
+    ESP_Line = false,
+    ESP_Distance = false,
+    ESP_TeamCheck = false,
     
+    -- WEAPON
     NoRecoil = true,
     NoSpread = true,
     FastReload = true,
     
+    -- ADMIN
     AdminCheck = true,
     AdminLeave = true,
 }
@@ -42,6 +51,7 @@ local Drawings = {}
 local canShoot = true
 local currentTarget = nil
 local isGUIOpen = true
+local currentTab = "Aimbot"
 
 -- ===== ПРОВЕРКА АДМИНОВ =====
 local function CheckAdmins()
@@ -106,7 +116,6 @@ local function IsPlayerVisible(character)
     return false
 end
 
--- ===== МГНОВЕННЫЙ ТРИГГЕРБОТ =====
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     
@@ -142,6 +151,10 @@ local function GetTriggerTarget()
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
             
+            if Settings.ESP_TeamCheck then
+                if player.Team == LocalPlayer.Team then continue end
+            end
+            
             if not IsPlayerVisible(character) then
                 continue
             end
@@ -164,7 +177,6 @@ local function GetTriggerTarget()
     return bestTarget
 end
 
--- ===== МГНОВЕННЫЙ АИМ (БЕЗ СГЛАЖИВАНИЯ) =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = math.huge
@@ -195,6 +207,10 @@ local function GetClosestPlayer()
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
             
+            if Settings.ESP_TeamCheck then
+                if player.Team == LocalPlayer.Team then continue end
+            end
+            
             if Settings.AimbotWallCheck then
                 if not IsPlayerVisible(character) then
                     continue
@@ -223,7 +239,6 @@ local function GetClosestPlayer()
     return closest
 end
 
--- ===== МГНОВЕННОЕ НАВЕДЕНИЕ (ТЕЛЕПОРТ) =====
 local function InstantAim(target)
     if not target or not target.Character then return end
     
@@ -238,12 +253,15 @@ local function InstantAim(target)
     local headPos = GetHeadPosition(character)
     if not headPos then return end
     
-    -- Мгновенный поворот камеры
     local camPos = Camera.CFrame.Position
     local newCF = CFrame.lookAt(camPos, headPos)
-    Camera.CFrame = newCF
     
-    -- Мгновенное движение мыши
+    if Settings.AimbotSmooth <= 1 then
+        Camera.CFrame = newCF
+    else
+        Camera.CFrame = Camera.CFrame:Lerp(newCF, 1 / Settings.AimbotSmooth)
+    end
+    
     local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
     if onScreen then
         local mousePos = UserInputService:GetMouseLocation()
@@ -252,13 +270,16 @@ local function InstantAim(target)
         
         if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
             pcall(function()
-                mousemoverel(deltaX, deltaY)
+                if Settings.AimbotSmooth <= 1 then
+                    mousemoverel(deltaX, deltaY)
+                else
+                    mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
+                end
             end)
         end
     end
 end
 
--- ===== МГНОВЕННЫЙ ВЫСТРЕЛ =====
 local function InstantShoot()
     if not canShoot then return end
     canShoot = false
@@ -315,26 +336,28 @@ local function DrawFOV()
     table.insert(Drawings, dot)
 end
 
--- ===== GUI =====
+-- ===== СОЗДАНИЕ GUI С ВКЛАДКАМИ =====
 local function CreateGUI()
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "PoloGUI"
     screenGui.Parent = game:GetService("CoreGui")
     
+    -- Main Frame
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 350, 0, 500)
-    mainFrame.Position = UDim2.new(0.5, -175, 0.5, -250)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 15, 50)
-    mainFrame.BackgroundTransparency = 0.95
+    mainFrame.Size = UDim2.new(0, 400, 0, 520)
+    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -260)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 10, 35)
+    mainFrame.BackgroundTransparency = 0.05
     mainFrame.BorderSizePixel = 0
     mainFrame.Parent = screenGui
     
+    -- Заголовок
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 40)
     title.Position = UDim2.new(0, 0, 0, 0)
     title.BackgroundColor3 = Color3.fromRGB(100, 40, 180)
-    title.BackgroundTransparency = 0.3
+    title.BackgroundTransparency = 0.2
     title.BorderSizePixel = 0
     title.Text = "✨ Polo Sniper Arena ✨"
     title.TextColor3 = Color3.fromRGB(220, 180, 255)
@@ -342,11 +365,12 @@ local function CreateGUI()
     title.Font = Enum.Font.GothamBold
     title.Parent = mainFrame
     
+    -- Кнопка закрытия
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 30, 0, 30)
     closeBtn.Position = UDim2.new(1, -35, 0, 5)
     closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    closeBtn.BackgroundTransparency = 0.5
+    closeBtn.BackgroundTransparency = 0.3
     closeBtn.BorderSizePixel = 0
     closeBtn.Text = "✕"
     closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -354,26 +378,68 @@ local function CreateGUI()
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.Parent = mainFrame
     
-    local scrollFrame = Instance.new("ScrollingFrame")
-    scrollFrame.Size = UDim2.new(1, -10, 1, -50)
-    scrollFrame.Position = UDim2.new(0, 5, 0, 45)
-    scrollFrame.BackgroundTransparency = 1
-    scrollFrame.BorderSizePixel = 0
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scrollFrame.ScrollBarThickness = 4
-    scrollFrame.Parent = mainFrame
+    -- ===== ВКЛАДКИ =====
+    local tabFrame = Instance.new("Frame")
+    tabFrame.Size = UDim2.new(1, 0, 0, 35)
+    tabFrame.Position = UDim2.new(0, 0, 0, 40)
+    tabFrame.BackgroundColor3 = Color3.fromRGB(40, 20, 70)
+    tabFrame.BackgroundTransparency = 0.3
+    tabFrame.BorderSizePixel = 0
+    tabFrame.Parent = mainFrame
     
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.Padding = UDim.new(0, 8)
-    listLayout.Parent = scrollFrame
+    local tabs = {"🎯 Aimbot", "🔫 Trigger", "👁️ Visuals", "🔧 Weapon", "🛡️ Admin"}
+    local tabButtons = {}
+    local tabContents = {}
     
-    local function CreateToggle(text, setting, default)
+    for i, tabName in ipairs(tabs) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1 / #tabs, -2, 1, -2)
+        btn.Position = UDim2.new((i - 1) / #tabs, 1, 0, 1)
+        btn.BackgroundColor3 = i == 1 and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(40, 20, 70)
+        btn.BackgroundTransparency = 0.3
+        btn.BorderSizePixel = 0
+        btn.Text = tabName
+        btn.TextColor3 = Color3.fromRGB(220, 200, 255)
+        btn.TextSize = 12
+        btn.Font = Enum.Font.GothamBold
+        btn.Parent = tabFrame
+        
+        tabButtons[i] = btn
+        
+        -- Контент вкладки
+        local content = Instance.new("ScrollingFrame")
+        content.Size = UDim2.new(1, -10, 1, -85)
+        content.Position = UDim2.new(0, 5, 0, 80)
+        content.BackgroundTransparency = 1
+        content.BorderSizePixel = 0
+        content.CanvasSize = UDim2.new(0, 0, 0, 0)
+        content.ScrollBarThickness = 4
+        content.Visible = i == 1
+        content.Parent = mainFrame
+        
+        local listLayout = Instance.new("UIListLayout")
+        listLayout.Padding = UDim.new(0, 6)
+        listLayout.Parent = content
+        
+        tabContents[i] = content
+        
+        btn.MouseButton1Click:Connect(function()
+            for j, tab in ipairs(tabContents) do
+                tab.Visible = (j == i)
+                tabButtons[j].BackgroundColor3 = (j == i) and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(40, 20, 70)
+            end
+            currentTab = tabName
+        end)
+    end
+    
+    -- ===== ФУНКЦИИ СОЗДАНИЯ ЭЛЕМЕНТОВ =====
+    local function CreateToggle(parent, text, setting, default)
         local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, 0, 0, 35)
+        frame.Size = UDim2.new(1, -10, 0, 32)
         frame.BackgroundColor3 = Color3.fromRGB(60, 30, 100)
-        frame.BackgroundTransparency = 0.5
+        frame.BackgroundTransparency = 0.6
         frame.BorderSizePixel = 0
-        frame.Parent = scrollFrame
+        frame.Parent = parent
         
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(0.7, -10, 1, 0)
@@ -381,19 +447,19 @@ local function CreateGUI()
         label.BackgroundTransparency = 1
         label.Text = text
         label.TextColor3 = Color3.fromRGB(220, 200, 255)
-        label.TextSize = 14
+        label.TextSize = 13
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Font = Enum.Font.Gotham
         label.Parent = frame
         
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 40, 0, 25)
-        btn.Position = UDim2.new(1, -50, 0.5, -12.5)
+        btn.Size = UDim2.new(0, 40, 0, 24)
+        btn.Position = UDim2.new(1, -45, 0.5, -12)
         btn.BackgroundColor3 = default and Color3.fromRGB(100, 50, 200) or Color3.fromRGB(60, 30, 100)
         btn.BorderSizePixel = 0
         btn.Text = default and "ON" or "OFF"
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.TextSize = 12
+        btn.TextSize = 11
         btn.Font = Enum.Font.GothamBold
         btn.Parent = frame
         
@@ -408,28 +474,28 @@ local function CreateGUI()
         return btn
     end
     
-    local function CreateSlider(text, setting, min, max, default)
+    local function CreateSlider(parent, text, setting, min, max, default)
         local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, 0, 0, 45)
+        frame.Size = UDim2.new(1, -10, 0, 40)
         frame.BackgroundColor3 = Color3.fromRGB(60, 30, 100)
-        frame.BackgroundTransparency = 0.5
+        frame.BackgroundTransparency = 0.6
         frame.BorderSizePixel = 0
-        frame.Parent = scrollFrame
+        frame.Parent = parent
         
         local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -20, 0, 20)
+        label.Size = UDim2.new(1, -20, 0, 18)
         label.Position = UDim2.new(0, 10, 0, 0)
         label.BackgroundTransparency = 1
         label.Text = text .. ": " .. tostring(default)
         label.TextColor3 = Color3.fromRGB(220, 200, 255)
-        label.TextSize = 13
+        label.TextSize = 12
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Font = Enum.Font.Gotham
         label.Parent = frame
         
         local slider = Instance.new("Frame")
-        slider.Size = UDim2.new(0.9, 0, 0, 4)
-        slider.Position = UDim2.new(0.05, 0, 0, 28)
+        slider.Size = UDim2.new(0.85, 0, 0, 4)
+        slider.Position = UDim2.new(0.05, 0, 0, 26)
         slider.BackgroundColor3 = Color3.fromRGB(40, 20, 70)
         slider.BorderSizePixel = 0
         slider.Parent = frame
@@ -474,23 +540,34 @@ local function CreateGUI()
         return slider
     end
     
-    CreateToggle("🎯 Aimbot", "Aimbot", true)
-    CreateSlider("🎯 Aimbot FOV", "AimbotFOV", 50, 500, 350)
-    CreateToggle("🧱 Wall Check", "AimbotWallCheck", true)
+    -- ===== ВКЛАДКА AIMBOT =====
+    CreateToggle(tabContents[1], "🎯 Aimbot", "Aimbot", true)
+    CreateSlider(tabContents[1], "🎯 FOV", "AimbotFOV", 50, 500, 350)
+    CreateSlider(tabContents[1], "🎯 Smoothness", "AimbotSmooth", 1, 10, 1)
+    CreateToggle(tabContents[1], "🧱 Wall Check", "AimbotWallCheck", true)
     
-    CreateToggle("🔫 TriggerBot", "TriggerBot", true)
-    CreateSlider("🎯 Trigger Precision", "TriggerPrecision", 5, 30, 15)
+    -- ===== ВКЛАДКА TRIGGER =====
+    CreateToggle(tabContents[2], "🔫 TriggerBot", "TriggerBot", true)
+    CreateSlider(tabContents[2], "🎯 Precision", "TriggerPrecision", 5, 40, 15)
+    CreateSlider(tabContents[2], "⏱️ Delay (sec)", "TriggerDelay", 1, 20, 1)
     
-    CreateToggle("👁️ ESP Box", "ESP_Box", true)
-    CreateToggle("👁️ ESP Through Walls", "ESP_Visible", true)
+    -- ===== ВКЛАДКА VISUALS =====
+    CreateToggle(tabContents[3], "📦 ESP Box", "ESP_Box", true)
+    CreateToggle(tabContents[3], "👻 Through Walls", "ESP_Visible", true)
+    CreateToggle(tabContents[3], "🦴 Skeleton", "ESP_Skeleton", false)
+    CreateToggle(tabContents[3], "📏 Distance", "ESP_Distance", false)
+    CreateToggle(tabContents[3], "🚫 Team Check", "ESP_TeamCheck", false)
     
-    CreateToggle("🔧 No Recoil", "NoRecoil", true)
-    CreateToggle("🔧 No Spread", "NoSpread", true)
-    CreateToggle("🔧 Fast Reload", "FastReload", true)
+    -- ===== ВКЛАДКА WEAPON =====
+    CreateToggle(tabContents[4], "🔫 No Recoil", "NoRecoil", true)
+    CreateToggle(tabContents[4], "🎯 No Spread", "NoSpread", true)
+    CreateToggle(tabContents[4], "⚡ Fast Reload", "FastReload", true)
     
-    CreateToggle("🛡️ Admin Check", "AdminCheck", true)
-    CreateToggle("🚪 Auto Leave on Admin", "AdminLeave", true)
+    -- ===== ВКЛАДКА ADMIN =====
+    CreateToggle(tabContents[5], "🛡️ Admin Check", "AdminCheck", true)
+    CreateToggle(tabContents[5], "🚪 Auto Leave", "AdminLeave", true)
     
+    -- Кнопка закрытия
     local guiOpen = true
     closeBtn.MouseButton1Click:Connect(function()
         guiOpen = not guiOpen
@@ -550,6 +627,11 @@ RunService.RenderStepped:Connect(function()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
+            
+            if Settings.ESP_TeamCheck then
+                if player.Team == LocalPlayer.Team then continue end
+            end
+            
             local isVisible = IsPlayerVisible(character)
             
             if not Settings.ESP_Visible and not isVisible then
@@ -574,7 +656,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== МГНОВЕННЫЙ ТРИГГЕРБОТ =====
     if Settings.TriggerBot and canShoot then
         local target = GetTriggerTarget()
         if target then
@@ -587,7 +668,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== МГНОВЕННЫЙ АИМ =====
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         if target then
@@ -603,12 +683,11 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Polo Sniper Arena",
-        Text = "Press Right Shift for GUI | Hold E for INSTANT aimbot",
+        Text = "Right Shift - GUI | E - Aimbot",
         Duration = 3
     })
 end)
 
 print("=== Polo Sniper Arena ULTRA FAST loaded ===")
-print("Press Right Shift to toggle GUI")
-print("Hold E for INSTANT aimbot (телепорт)")
-print("TriggerBot: МГНОВЕННЫЙ")
+print("Right Shift - toggle GUI")
+print("E - hold for aimbot")
