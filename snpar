@@ -1,477 +1,854 @@
--- Зависимости и сервисы Roblox
+-- Polo Sniper Arena - ULTRA FAST (Мгновенный аим + Идеальный Trigger + Красивое GUI)
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
-
+local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
--- Таблица настроек (Инициализация)
-local Settings = {
-    TriggerBot = false,
-    TriggerPrecision = 15, -- Дефолтная точность (радиус в пикселях)
-    Mode = "Комбинированный" -- Режим по умолчанию
+-- ===== ADMIN LIST =====
+local AdminIDs = {
+    -- СЮДА ВСТАВИТЬ ВАШИ АЙДИ АДМИНОВ
+    -- Пример: 123456789,
 }
 
+-- ===== НАСТРОЙКИ =====
+local Settings = {
+    -- AIMBOT
+    Aimbot = true,
+    AimbotFOV = 350,
+    AimbotKey = Enum.KeyCode.E,
+    AimbotWallCheck = true,
+    AimbotSmooth = 1,
+    
+    -- TRIGGER (ИДЕАЛЬНЫЙ)
+    TriggerBot = true,
+    TriggerDelay = 0.001,
+    TriggerPrecision = 18,
+    TriggerAngle = 0.5, -- Максимальный угол для выстрела (градусы)
+    
+    -- VISUALS
+    ESP_Box = true,
+    ESP_Visible = true,
+    ESP_Skeleton = false,
+    ESP_Line = false,
+    ESP_Distance = false,
+    ESP_TeamCheck = false,
+    
+    -- WEAPON
+    NoRecoil = true,
+    NoSpread = true,
+    FastReload = true,
+    
+    -- ADMIN
+    AdminCheck = true,
+    AdminLeave = true,
+}
+
+-- ===== ПЕРЕМЕННЫЕ =====
+local isAimbotKeyPressed = false
+local Drawings = {}
 local canShoot = true
+local currentTarget = nil
+local isGUIOpen = true
+local currentTab = "Aimbot"
+local isDragging = false
+local dragStart = nil
+local dragOffset = nil
+local lastShootTime = 0
+local shootCooldown = 0.03
 
--- Заглушки для функций выстрела и поиска целей (замените на свои, если есть в основном скрипте)
-local function InstantShoot()
-    print("[TriggerBot]: Выстрел!")
-    -- Сюда идет ваш код клика/выстрела, например: mouse1click()
-end
-
-local function GetTriggerTarget()
-    local mousePos = UserInputService:GetMouseLocation()
-    local closestPlayer = nil
-    local shortestDistance = math.huge
-
+-- ===== ПРОВЕРКА АДМИНОВ =====
+local function CheckAdmins()
+    if not Settings.AdminCheck then return end
+    
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            if humanoid and humanoid.Health > 0 then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
-                if onScreen then
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    if dist < shortestDistance and dist < 150 then -- Радиус обзора триггера
-                        shortestDistance = dist
-                        closestPlayer = player
+        if player ~= LocalPlayer then
+            local userId = player.UserId
+            for _, adminId in pairs(AdminIDs) do
+                if userId == adminId then
+                    if Settings.AdminLeave then
+                        pcall(function()
+                            game:GetService("StarterGui"):SetCore("SendNotification", {
+                                Title = "⚠️ ADMIN DETECTED",
+                                Text = player.Name .. " is an admin! Leaving server...",
+                                Duration = 5
+                            })
+                        end)
+                        wait(1)
+                        game:GetService("TeleportService"):Teleport(game.PlaceId)
+                        return
                     end
                 end
             end
         end
     end
-    return closestPlayer
 end
 
-local function GetClosestPlayer()
-    return GetTriggerTarget()
+-- ===== ФУНКЦИИ =====
+local function GetHeadPosition(character)
+    local head = character:FindFirstChild("Head")
+    if head then
+        return head.Position
+    end
+    return nil
 end
 
--- ==========================================
--- Исправленная логика Триггербота
--- ==========================================
-
-local function GetHeadWorldPosition(target)
-    if not target or not target.Character then return nil end
-    local head = target.Character:FindFirstChild("Head")
-    return head and head.Position or nil
+local function IsPlayerVisible(character)
+    if not character or not character:FindFirstChild("Head") then
+        return false
+    end
+    
+    local head = character.Head
+    local origin = Camera.CFrame.Position
+    local direction = (head.Position - origin).Unit * (head.Position - origin).Magnitude
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
+    
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    
+    if not raycastResult then
+        return true
+    end
+    
+    local hitPart = raycastResult.Instance
+    if hitPart and hitPart:IsDescendantOf(character) then
+        return true
+    end
+    
+    return false
 end
 
-local function IsHeadVisible(target)
+-- ===== ИДЕАЛЬНЫЙ ТРИГГЕРБОТ (С ПРОВЕРКОЙ УГЛА) =====
+local function IsPerfectAimingAtHead(target)
     if not target or not target.Character then return false end
+    
     local head = target.Character:FindFirstChild("Head")
     if not head then return false end
     
-    local origin = Camera.CFrame.Position
-    local direction = head.Position - origin
-    
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, target.Character}
-    
-    local raycastResult = Workspace:Raycast(origin, direction, raycastParams)
-    
-    if not raycastResult then return true end
-    return raycastResult.Instance:IsDescendantOf(target.Character)
-end
-
-local function IsPerfectAimingAtHead(target)
-    if not target or not target.Character then return false end
-    local headPos = GetHeadWorldPosition(target)
-    if not headPos then return false end
-    
+    local headPos = head.Position
     local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
+    
     if not onScreen then return false end
     
     local mousePos = UserInputService:GetMouseLocation()
     local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
     
-    local distance = (Camera.CFrame.Position - headPos).Magnitude
-    local precision = Settings.TriggerPrecision
-    
-    if distance > 200 then
-        precision = precision * 0.6
-    elseif distance > 100 then
-        precision = precision * 0.8
+    -- Проверка расстояния в пикселях
+    if dist > Settings.TriggerPrecision then
+        return false
     end
     
-    if dist > precision then return false end
-    
-    local humanoid = target.Character:FindFirstChild("Humanoid")
-    return humanoid and humanoid.Health > 0
-end
-
-local function PerfectTriggerBot()
-    if not Settings.TriggerBot or not canShoot then return end
-    local target = GetTriggerTarget()
-    if not target or not IsHeadVisible(target) or not IsPerfectAimingAtHead(target) then return end
-    
-    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
-    if not tool then return end
-    
-    for _, child in pairs(tool:GetDescendants()) do
-        if child:IsA("NumberValue") and child.Name:lower():find("cooldown") and child.Value > 0 then
-            return
-        end
-    end
-    
-    InstantShoot()
-end
-
-local function SmartTriggerBot()
-    if not Settings.TriggerBot or not canShoot then return end
-    local target = GetClosestPlayer()
-    if not target or not IsHeadVisible(target) then return end
-    
-    local headPos = GetHeadWorldPosition(target)
-    if not headPos then return end
-    
-    local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
-    if not onScreen then return end
-    
-    local mousePos = UserInputService:GetMouseLocation()
-    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-    
-    if dist < 50 then
-        local deltaX = screenPos.X - mousePos.X
-        local deltaY = screenPos.Y - mousePos.Y
-        
-        if mousemoverel then
-            pcall(function() mousemoverel(deltaX * 0.3, deltaY * 0.3) end)
-        end
-        
-        local newMousePos = UserInputService:GetMouseLocation()
-        local newDist = (Vector2.new(screenPos.X, screenPos.Y) - newMousePos).Magnitude
-        
-        if newDist < Settings.TriggerPrecision then
-            local humanoid = target.Character:FindFirstChild("Humanoid")
-            if humanoid and humanoid.Health > 0 then
-                InstantShoot()
-            end
-        end
-    end
-end
-
-local function UltraPreciseTriggerBot()
-    if not Settings.TriggerBot or not canShoot then return end
-    local target = GetTriggerTarget()
-    if not target then return end
-    
-    local humanoid = target.Character and target.Character:FindFirstChild("Humanoid")
-    if not humanoid or humanoid.Health <= 0 or not IsHeadVisible(target) then return end
-    
-    local headPos = GetHeadWorldPosition(target)
-    if not headPos then return end
-    
+    -- Проверка угла между прицелом и головой
     local camPos = Camera.CFrame.Position
-    local directionToHead = (headPos - camPos).Unit
     local camDirection = Camera.CFrame.LookVector
-    
+    local directionToHead = (headPos - camPos).Unit
     local angle = math.acos(math.clamp(camDirection:Dot(directionToHead), -1, 1))
-    if math.deg(angle) > 0.5 then return end
+    local angleDeg = math.deg(angle)
     
-    local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
-    if not onScreen then return end
+    if angleDeg > Settings.TriggerAngle then
+        return false
+    end
     
+    -- Проверка что голова в центре экрана
     local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     local pixelDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
     
-    if pixelDist <= 30 then
-        InstantShoot()
+    if pixelDist > 50 then
+        return false
     end
+    
+    local humanoid = target.Character:FindFirstChild("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then
+        return false
+    end
+    
+    return true
 end
 
--- Основной цикл работы скрипта
-task.spawn(function()
-    while task.wait() do
-        if Settings.TriggerBot then
-            if Settings.Mode == "Идеальный" then
-                PerfectTriggerBot()
-            elseif Settings.Mode == "Умный" then
-                SmartTriggerBot()
-            elseif Settings.Mode == "Точный" then
-                UltraPreciseTriggerBot()
-            elseif Settings.Mode == "Комбинированный" then
-                UltraPreciseTriggerBot()
-                if canShoot then
-                    SmartTriggerBot()
+local function GetTriggerTarget()
+    local bestTarget = nil
+    local bestDist = math.huge
+    local mousePos = UserInputService:GetMouseLocation()
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local character = player.Character
+            
+            if Settings.ESP_TeamCheck then
+                if player.Team == LocalPlayer.Team then continue end
+            end
+            
+            if not IsPlayerVisible(character) then
+                continue
+            end
+            
+            local headPos = GetHeadPosition(character)
+            if headPos then
+                local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+                
+                if onScreen and pos.Z > 0 then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    if dist < bestDist and dist < Settings.AimbotFOV then
+                        bestDist = dist
+                        bestTarget = player
+                    end
                 end
             end
         end
     end
-end)
-
-
--- ==========================================
--- СОЗДАНИЕ УЛЬТРА-КРАСИВОГО GUI (DARK + PURPLE GLOW)
--- ==========================================
-
--- Удаление старого интерфейса, если он существовал
-if CoreGui:FindFirstChild("PurpleTriggerGui") then
-    CoreGui.PurpleTriggerGui:Destroy()
+    
+    return bestTarget
 end
 
-local PurpleTriggerGui = Instance.new("ScreenGui")
-PurpleTriggerGui.Name = "PurpleTriggerGui"
-PurpleTriggerGui.Parent = CoreGui
-PurpleTriggerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
--- ТЕНЬ / СВЕЧЕНИЕ (Glow Effect)
-local GlowFrame = Instance.new("Frame")
-GlowFrame.Name = "GlowFrame"
-GlowFrame.Position = UDim2.new(0.5, -165, 0.5, -140)
-GlowFrame.Size = UDim2.new(0, 330, 0, 280)
-GlowFrame.BackgroundColor3 = Color3.fromRGB(18, 16, 24)
-GlowFrame.BorderSizePixel = 0
-GlowFrame.Active = true
-GlowFrame.Draggable = true -- Позволяет перетаскивать меню мышкой
-GlowFrame.Parent = PurpleTriggerGui
-
-local GlowCorner = Instance.new("UICorner")
-GlowCorner.CornerRadius = UDim.new(0, 12)
-GlowCorner.Parent = GlowFrame
-
--- Фиолетовая неоновая обводка (Glow / Stroke)
-local UIStroke = Instance.new("UIStroke")
-UIStroke.Color = Color3.fromRGB(157, 78, 221) -- Яркий фиолетовый
-UIStroke.Thickness = 2.5
-UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-UIStroke.Parent = GlowFrame
-
--- Заголовок меню
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 45)
-Title.BackgroundTransparency = 1
-Title.Font = Enum.Font.GothamBold
-Title.Text = "PURPLE TRIGGER v2.0"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 16
-Title.Parent = GlowFrame
-
--- Градиент для красивого текста
-local UIGradient = Instance.new("UIGradient")
-UIGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(194, 147, 240))
-}
-UIGradient.Parent = Title
-
--- Подзаголовок (Линия разделения)
-local Line = Instance.new("Frame")
-Line.Size = UDim2.new(0.9, 0, 0, 1)
-Line.Position = UDim2.new(0.05, 0, 0, 45)
-Line.BackgroundColor3 = Color3.fromRGB(40, 35, 55)
-Line.BorderSizePixel = 0
-Line.Parent = GlowFrame
-
--- Контейнер для элементов
-local Container = Instance.new("Frame")
-Container.Size = UDim2.new(0.9, 0, 0, 210)
-Container.Position = UDim2.new(0.05, 0, 0, 55)
-Container.BackgroundTransparency = 1
-Container.Parent = GlowFrame
-
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.Padding = UDim.new(0, 12)
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Parent = Container
-
--- 1. ЭЛЕМЕНТ: ТУМБЛЕР (Toggle TriggerBot)
-local ToggleFrame = Instance.new("Frame")
-ToggleFrame.Size = UDim2.new(1, 0, 0, 40)
-ToggleFrame.BackgroundColor3 = Color3.fromRGB(26, 23, 36)
-ToggleFrame.Parent = Container
-
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 8)
-ToggleCorner.Parent = ToggleFrame
-
-local ToggleText = Instance.new("TextLabel")
-ToggleText.Size = UDim2.new(0.7, 0, 1, 0)
-ToggleText.Position = UDim2.new(0.04, 0, 0, 0)
-ToggleText.BackgroundTransparency = 1
-ToggleText.Font = Enum.Font.GothamSemibold
-ToggleText.Text = "Включить Триггербот"
-ToggleText.TextColor3 = Color3.fromRGB(200, 200, 200)
-ToggleText.TextSize = 14
-ToggleText.TextXAlignment = Enum.TextXAlignment.Left
-ToggleText.Parent = ToggleFrame
-
-local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Size = UDim2.new(0, 45, 0, 22)
-ToggleBtn.Position = UDim2.new(0.96, -45, 0.5, -11)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(45, 40, 60)
-ToggleBtn.Text = ""
-ToggleBtn.Parent = ToggleFrame
-
-local BtnCorner = Instance.new("UICorner")
-BtnCorner.CornerRadius = UDim.new(1, 0)
-BtnCorner.Parent = ToggleBtn
-
-local ToggleCircle = Instance.new("Frame")
-ToggleCircle.Size = UDim2.new(0, 16, 0, 16)
-ToggleCircle.Position = UDim2.new(0, 3, 0.5, -8)
-ToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-ToggleCircle.Parent = ToggleBtn
-
-local CircleCorner = Instance.new("UICorner")
-CircleCorner.CornerRadius = UDim.new(1, 0)
-CircleCorner.Parent = ToggleCircle
-
-ToggleBtn.MouseButton1Click:Connect(function()
-    Settings.TriggerBot = not Settings.TriggerBot
-    local targetPos = Settings.TriggerBot and UDim2.new(0, 26, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-    local targetColor = Settings.TriggerBot and Color3.fromRGB(157, 78, 221) or Color3.fromRGB(45, 40, 60)
+local function GetClosestPlayer()
+    local closest = nil
+    local closestDist = math.huge
+    local mousePos = UserInputService:GetMouseLocation()
     
-    TweenService:Create(ToggleCircle, TweenInfo.new(0.2), {Position = targetPos}):Play()
-    TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
-end)
-
--- 2. ЭЛЕМЕНТ: ДРОПДАУН (Выбор режима)
-local DropdownFrame = Instance.new("Frame")
-DropdownFrame.Size = UDim2.new(1, 0, 0, 40)
-DropdownFrame.BackgroundColor3 = Color3.fromRGB(26, 23, 36)
-DropdownFrame.Parent = Container
-
-local DropdownCorner = Instance.new("UICorner")
-DropdownCorner.CornerRadius = UDim.new(0, 8)
-DropdownCorner.Parent = DropdownFrame
-
-local DropdownText = Instance.new("TextLabel")
-DropdownText.Size = UDim2.new(0.5, 0, 1, 0)
-DropdownText.Position = UDim2.new(0.04, 0, 0, 0)
-DropdownText.BackgroundTransparency = 1
-DropdownText.Font = Enum.Font.GothamSemibold
-DropdownText.Text = "Режим работы"
-DropdownText.TextColor3 = Color3.fromRGB(200, 200, 200)
-DropdownText.TextSize = 14
-DropdownText.TextXAlignment = Enum.TextXAlignment.Left
-DropdownText.Parent = DropdownFrame
-
-local DropdownBtn = Instance.new("TextButton")
-DropdownBtn.Size = UDim2.new(0, 130, 0, 26)
-DropdownBtn.Position = UDim2.new(0.96, -130, 0.5, -13)
-DropdownBtn.BackgroundColor3 = Color3.fromRGB(36, 32, 50)
-DropdownBtn.Font = Enum.Font.Gotham
-DropdownBtn.Text = Settings.Mode
-DropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-DropdownBtn.TextSize = 12
-DropdownBtn.Parent = DropdownFrame
-
-local DropCorner = Instance.new("UICorner")
-DropCorner.CornerRadius = UDim.new(0, 6)
-DropCorner.Parent = DropdownBtn
-
-local ModeList = {"Идеальный", "Умный", "Точный", "Комбинированный"}
-local currentModeIndex = 4
-
-DropdownBtn.MouseButton1Click:Connect(function()
-    currentModeIndex = currentModeIndex % #ModeList + 1
-    Settings.Mode = ModeList[currentModeIndex]
-    DropdownBtn.Text = Settings.Mode
+    if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("Head") then
+        local headPos = GetHeadPosition(currentTarget.Character)
+        if headPos then
+            local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+            if onScreen and pos.Z > 0 then
+                local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                if dist < Settings.AimbotFOV then
+                    if Settings.AimbotWallCheck then
+                        if IsPlayerVisible(currentTarget.Character) then
+                            return currentTarget
+                        else
+                            currentTarget = nil
+                        end
+                    else
+                        return currentTarget
+                    end
+                end
+            end
+        end
+    end
     
-    -- Вспышка фиолетовым при смене режима
-    DropdownBtn.BackgroundColor3 = Color3.fromRGB(157, 78, 221)
-    TweenService:Create(DropdownBtn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(36, 32, 50)}):Play()
-end)
-
--- 3. ЭЛЕМЕНТ: ПОЛЗУНОК (Slider Точности)
-local SliderFrame = Instance.new("Frame")
-SliderFrame.Size = UDim2.new(1, 0, 0, 55)
-SliderFrame.BackgroundColor3 = Color3.fromRGB(26, 23, 36)
-SliderFrame.Parent = Container
-
-local SliderCorner = Instance.new("UICorner")
-SliderCorner.CornerRadius = UDim.new(0, 8)
-SliderCorner.Parent = SliderFrame
-
-local SliderText = Instance.new("TextLabel")
-SliderText.Size = UDim2.new(0.7, 0, 0, 25)
-SliderText.Position = UDim2.new(0.04, 0, 0, 2)
-SliderText.BackgroundTransparency = 1
-SliderText.Font = Enum.Font.GothamSemibold
-SliderText.Text = "Радиус точности (FOV)"
-SliderText.TextColor3 = Color3.fromRGB(200, 200, 200)
-SliderText.TextSize = 13
-SliderText.TextXAlignment = Enum.TextXAlignment.Left
-SliderText.Parent = SliderFrame
-
-local SliderValueText = Instance.new("TextLabel")
-SliderValueText.Size = UDim2.new(0.2, 0, 0, 25)
-SliderValueText.Position = UDim2.new(0.76, 0, 0, 2)
-SliderValueText.BackgroundTransparency = 1
-SliderValueText.Font = Enum.Font.GothamBold
-SliderValueText.Text = tostring(Settings.TriggerPrecision) .. "px"
-SliderValueText.TextColor3 = Color3.fromRGB(157, 78, 221)
-SliderValueText.TextSize = 13
-SliderValueText.TextXAlignment = Enum.TextXAlignment.Right
-SliderValueText.Parent = SliderFrame
-
-local SliderTrack = Instance.new("TextButton")
-SliderTrack.Size = UDim2.new(0.92, 0, 0, 6)
-SliderTrack.Position = UDim2.new(0.04, 0, 0, 36)
-SliderTrack.BackgroundColor3 = Color3.fromRGB(45, 40, 60)
-SliderTrack.Text = ""
-SliderTrack.AutoButtonColor = false
-SliderTrack.Parent = SliderFrame
-
-local TrackCorner = Instance.new("UICorner")
-TrackCorner.CornerRadius = UDim.new(1, 0)
-TrackCorner.Parent = SliderTrack
-
-local SliderFill = Instance.new("Frame")
-SliderFill.Size = UDim2.new(0.3, 0, 1, 0) -- Начнем с 30% (примерно 15 пикселей от 50 макс)
-SliderFill.BackgroundColor3 = Color3.fromRGB(157, 78, 221)
-SliderFill.BorderSizePixel = 0
-SliderFill.Parent = SliderTrack
-
-local FillCorner = Instance.new("UICorner")
-FillCorner.CornerRadius = UDim.new(1, 0)
-FillCorner.Parent = SliderFill
-
--- Логика перетаскивания ползунка
-local isSliding = false
-local function UpdateSlider()
-    local mousePos = UserInputService:GetMouseLocation().X
-    local trackPos = SliderTrack.AbsolutePosition.X
-    local trackWidth = SliderTrack.AbsoluteSize.X
-    local percentage = math.clamp((mousePos - trackPos) / trackWidth, 0, 1)
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local character = player.Character
+            
+            if Settings.ESP_TeamCheck then
+                if player.Team == LocalPlayer.Team then continue end
+            end
+            
+            if Settings.AimbotWallCheck then
+                if not IsPlayerVisible(character) then
+                    continue
+                end
+            end
+            
+            local headPos = GetHeadPosition(character)
+            if headPos then
+                local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+                
+                if onScreen and pos.Z > 0 then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    if dist < closestDist and dist < Settings.AimbotFOV then
+                        closestDist = dist
+                        closest = player
+                    end
+                end
+            end
+        end
+    end
     
-    SliderFill.Size = UDim2.new(percentage, 0, 1, 0)
-    local calculatedValue = math.round(percentage * 50) -- Максимальный радиус 50 пикселей
-    Settings.TriggerPrecision = calculatedValue
-    SliderValueText.Text = tostring(calculatedValue) .. "px"
+    if closest then
+        currentTarget = closest
+    end
+    
+    return closest
 end
 
-SliderTrack.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isSliding = true
-        UpdateSlider()
+local function InstantAim(target)
+    if not target or not target.Character then return end
+    
+    local character = target.Character
+    
+    if Settings.AimbotWallCheck then
+        if not IsPlayerVisible(character) then
+            return
+        end
     end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isSliding = false
+    
+    local headPos = GetHeadPosition(character)
+    if not headPos then return end
+    
+    local camPos = Camera.CFrame.Position
+    local newCF = CFrame.lookAt(camPos, headPos)
+    
+    if Settings.AimbotSmooth <= 1 then
+        Camera.CFrame = newCF
+    else
+        Camera.CFrame = Camera.CFrame:Lerp(newCF, 1 / Settings.AimbotSmooth)
     end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if isSliding and input.UserInputType == Enum.UserInputType.MouseMovement then
-        UpdateSlider()
+    
+    local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
+    if onScreen then
+        local mousePos = UserInputService:GetMouseLocation()
+        local deltaX = screenPos.X - mousePos.X
+        local deltaY = screenPos.Y - mousePos.Y
+        
+        if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
+            pcall(function()
+                if Settings.AimbotSmooth <= 1 then
+                    mousemoverel(deltaX, deltaY)
+                else
+                    mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
+                end
+            end)
+        end
     end
-end)
+end
 
--- Инструкция закрытия меню
-local InfoText = Instance.new("TextLabel")
-InfoText.Size = UDim2.new(1, 0, 0, 20)
-InfoText.Position = UDim2.new(0, 0, 1, -25)
-InfoText.BackgroundTransparency = 1
-InfoText.Font = Enum.Font.GothamItalic
-InfoText.Text = "Меню можно свободно перетаскивать"
-InfoText.TextColor3 = Color3.fromRGB(90, 80, 110)
-InfoText.TextSize = 11
-InfoText.Parent = GlowFrame
+-- ===== ИДЕАЛЬНЫЙ ВЫСТРЕЛ (С ПРОВЕРКОЙ КУЛДАУНА) =====
+local function PerfectShot()
+    if not canShoot then return end
+    
+    local currentTime = tick()
+    if currentTime - lastShootTime < shootCooldown then
+        return
+    end
+    lastShootTime = currentTime
+    
+    canShoot = false
+    
+    pcall(function()
+        mouse1click()
+    end)
+    
+    task.wait(Settings.TriggerDelay)
+    canShoot = true
+end
+
+local function ApplyWeaponMods()
+    pcall(function()
+        local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+        if tool then
+            for _, child in pairs(tool:GetDescendants()) do
+                if child:IsA("NumberValue") or child:IsA("DoubleConstrainedValue") or child:IsA("IntValue") then
+                    local name = child.Name:lower()
+                    
+                    if Settings.NoRecoil and (name:find("recoil") or name:find("kick")) then
+                        child.Value = 0
+                    end
+                    
+                    if Settings.NoSpread and (name:find("spread") or name:find("accuracy")) then
+                        child.Value = 0
+                    end
+                    
+                    if Settings.FastReload and name:find("reload") then
+                        child.Value = 0.01
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ===== ESP =====
+local function DrawSkeleton(character)
+    if not character then return end
+    
+    local parts = {
+        Head = "Head",
+        UpperTorso = "UpperTorso",
+        LowerTorso = "LowerTorso",
+        LeftArm = "LeftArm",
+        RightArm = "RightArm",
+        LeftLeg = "LeftLeg",
+        RightLeg = "RightLeg",
+    }
+    
+    local function getPart(name)
+        return character:FindFirstChild(name) or character:FindFirstChild(name:lower())
+    end
+    
+    local function drawLine(part1, part2, color)
+        if not part1 or not part2 then return end
+        local pos1, vis1 = Camera:WorldToViewportPoint(part1.Position)
+        local pos2, vis2 = Camera:WorldToViewportPoint(part2.Position)
+        if vis1 and vis2 then
+            local line = Drawing.new("Line")
+            line.Visible = true
+            line.From = Vector2.new(pos1.X, pos1.Y)
+            line.To = Vector2.new(pos2.X, pos2.Y)
+            line.Color = color or Color3.fromRGB(150, 80, 255)
+            line.Thickness = 2
+            table.insert(Drawings, line)
+        end
+    end
+    
+    local head = getPart("Head")
+    local upper = getPart("UpperTorso") or getPart("Torso")
+    local lower = getPart("LowerTorso")
+    local lArm = getPart("LeftArm")
+    local rArm = getPart("RightArm")
+    local lLeg = getPart("LeftLeg")
+    local rLeg = getPart("RightLeg")
+    
+    local color = Color3.fromRGB(150, 80, 255)
+    
+    if upper and head then drawLine(upper, head, color) end
+    if upper and lower then drawLine(upper, lower, color) end
+    if upper and lArm then drawLine(upper, lArm, color) end
+    if upper and rArm then drawLine(upper, rArm, color) end
+    if lower and lLeg then drawLine(lower, lLeg, color) end
+    if lower and rLeg then drawLine(lower, rLeg, color) end
+end
+
+local function DrawDistance(character)
+    if not character or not character:FindFirstChild("Head") then return end
+    
+    local head = character.Head
+    local dist = (Camera.CFrame.Position - head.Position).Magnitude
+    local pos, onScreen = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 2, 0))
+    
+    if onScreen then
+        local text = Drawing.new("Text")
+        text.Visible = true
+        text.Position = Vector2.new(pos.X, pos.Y)
+        text.Text = math.round(dist) .. "m"
+        text.Color = Color3.fromRGB(255, 255, 255)
+        text.Size = 14
+        text.Center = true
+        text.Outline = true
+        text.OutlineColor = Color3.fromRGB(0, 0, 0)
+        table.insert(Drawings, text)
+    end
+end
+
+local function DrawLineToPlayer(character)
+    if not character or not character:FindFirstChild("Head") then return end
+    
+    local head = character.Head
+    local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+    
+    if onScreen then
+        local line = Drawing.new("Line")
+        line.Visible = true
+        line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+        line.To = Vector2.new(pos.X, pos.Y)
+        line.Color = Color3.fromRGB(150, 80, 255)
+        line.Thickness = 1
+        table.insert(Drawings, line)
+    end
+end
+
+local function DrawFOV()
+    local fovCircle = Drawing.new("Circle")
+    fovCircle.Visible = true
+    fovCircle.Radius = Settings.AimbotFOV
+    fovCircle.Thickness = 2
+    fovCircle.Color = Color3.fromRGB(255, 255, 255)
+    fovCircle.Filled = false
+    fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    table.insert(Drawings, fovCircle)
+end
+
+-- ===== КРАСИВОЕ GUI =====
+local function CreateGUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "PoloGUI"
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = game:GetService("CoreGui")
+    
+    -- Main Frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 440, 0, 560)
+    mainFrame.Position = UDim2.new(0.5, -220, 0.5, -280)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(12, 6, 22)
+    mainFrame.BackgroundTransparency = 0.02
+    mainFrame.BorderSizePixel = 0
+    mainFrame.ClipsDescendants = true
+    mainFrame.Parent = screenGui
+    
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 16)
+    mainCorner.Parent = mainFrame
+    
+    -- Shadow
+    local shadow = Instance.new("Frame")
+    shadow.Size = UDim2.new(1, 20, 1, 20)
+    shadow.Position = UDim2.new(0, -10, 0, -10)
+    shadow.BackgroundColor3 = Color3.fromRGB(120, 50, 220)
+    shadow.BackgroundTransparency = 0.7
+    shadow.BorderSizePixel = 0
+    shadow.Parent = mainFrame
+    
+    local shadowCorner = Instance.new("UICorner")
+    shadowCorner.CornerRadius = UDim.new(0, 24)
+    shadowCorner.Parent = shadow
+    
+    -- Title Bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 50)
+    titleBar.Position = UDim2.new(0, 0, 0, 0)
+    titleBar.BackgroundColor3 = Color3.fromRGB(100, 40, 180)
+    titleBar.BackgroundTransparency = 0.1
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = mainFrame
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 16)
+    titleCorner.Parent = titleBar
+    
+    local titleGradient = Instance.new("UIGradient")
+    titleGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(130, 60, 230)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 30, 180)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(130, 60, 230))
+    })
+    titleGradient.Rotation = 45
+    titleGradient.Parent = titleBar
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(0.8, 0, 1, 0)
+    title.Position = UDim2.new(0, 18, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "🔫 Sniper Arena Script | by wizzey"
+    title.TextColor3 = Color3.fromRGB(240, 220, 255)
+    title.TextSize = 17
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Font = Enum.Font.GothamBold
+    title.TextStrokeColor3 = Color3.fromRGB(50, 20, 100)
+    title.TextStrokeTransparency = 0.5
+    title.Parent = titleBar
+    
+    -- Close Button
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 34, 0, 34)
+    closeBtn.Position = UDim2.new(1, -40, 0.5, -17)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+    closeBtn.BackgroundTransparency = 0.2
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.TextSize = 18
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.Parent = titleBar
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 8)
+    closeCorner.Parent = closeBtn
+    
+    closeBtn.MouseEnter:Connect(function()
+        closeBtn:TweenSize(UDim2.new(0, 38, 0, 38), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.15, true)
+        closeBtn.BackgroundTransparency = 0.1
+    end)
+    closeBtn.MouseLeave:Connect(function()
+        closeBtn:TweenSize(UDim2.new(0, 34, 0, 34), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.15, true)
+        closeBtn.BackgroundTransparency = 0.2
+    end)
+    
+    -- Drag
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+            dragStart = input.Position
+            dragOffset = mainFrame.Position
+        end
+    end)
+    
+    titleBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = false
+        end
+    end)
+    
+    titleBar.InputChanged:Connect(function(input)
+        if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(
+                dragOffset.X.Scale,
+                dragOffset.X.Offset + delta.X,
+                dragOffset.Y.Scale,
+                dragOffset.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    -- Tabs
+    local tabFrame = Instance.new("Frame")
+    tabFrame.Size = UDim2.new(1, 0, 0, 42)
+    tabFrame.Position = UDim2.new(0, 0, 0, 50)
+    tabFrame.BackgroundColor3 = Color3.fromRGB(30, 15, 55)
+    tabFrame.BackgroundTransparency = 0.3
+    tabFrame.BorderSizePixel = 0
+    tabFrame.Parent = mainFrame
+    
+    local tabs = {"🎯 Aimbot", "🔫 Trigger", "👁️ Visuals", "🔧 Weapon", "🛡️ Admin"}
+    local tabButtons = {}
+    local tabContents = {}
+    
+    for i, tabName in ipairs(tabs) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1 / #tabs, -4, 1, -4)
+        btn.Position = UDim2.new((i - 1) / #tabs, 2, 0, 2)
+        btn.BackgroundColor3 = i == 1 and Color3.fromRGB(140, 60, 240) or Color3.fromRGB(40, 20, 80)
+        btn.BackgroundTransparency = i == 1 and 0.3 or 0.5
+        btn.BorderSizePixel = 0
+        btn.Text = tabName
+        btn.TextColor3 = i == 1 and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 180, 220)
+        btn.TextSize = 13
+        btn.Font = Enum.Font.GothamBold
+        btn.Parent = tabFrame
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 8)
+        btnCorner.Parent = btn
+        
+        tabButtons[i] = btn
+        
+        local content = Instance.new("ScrollingFrame")
+        content.Size = UDim2.new(1, -10, 1, -95)
+        content.Position = UDim2.new(0, 5, 0, 95)
+        content.BackgroundTransparency = 1
+        content.BorderSizePixel = 0
+        content.CanvasSize = UDim2.new(0, 0, 0, 0)
+        content.ScrollBarThickness = 4
+        content.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 180)
+        content.Visible = i == 1
+        content.Parent = mainFrame
+        
+        local listLayout = Instance.new("UIListLayout")
+        listLayout.Padding = UDim.new(0, 8)
+        listLayout.Parent = content
+        
+        tabContents[i] = content
+        
+        btn.MouseButton1Click:Connect(function()
+            for j, tab in ipairs(tabContents) do
+                tab.Visible = (j == i)
+                tabButtons[j].BackgroundColor3 = (j == i) and Color3.fromRGB(140, 60, 240) or Color3.fromRGB(40, 20, 80)
+                tabButtons[j].BackgroundTransparency = (j == i) and 0.3 or 0.5
+                tabButtons[j].TextColor3 = (j == i) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 180, 220)
+                tabButtons[j].TextSize = (j == i) and 14 or 13
+            end
+            currentTab = tabName
+        end)
+    end
+    
+    -- ===== GUI ELEMENTS =====
+    local function CreateToggle(parent, text, setting, default)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, -10, 0, 40)
+        frame.BackgroundColor3 = Color3.fromRGB(50, 25, 90)
+        frame.BackgroundTransparency = 0.4
+        frame.BorderSizePixel = 0
+        frame.Parent = parent
+        
+        local frameCorner = Instance.new("UICorner")
+        frameCorner.CornerRadius = UDim.new(0, 10)
+        frameCorner.Parent = frame
+        
+        frame.MouseEnter:Connect(function()
+            frame:TweenBackgroundTransparency(0.2, Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.15, true)
+        end)
+        frame.MouseLeave:Connect(function()
+            frame:TweenBackgroundTransparency(0.4, Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.15, true)
+        end)
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.7, -10, 1, 0)
+        label.Position = UDim2.new(0, 14, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = Color3.fromRGB(235, 215, 255)
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = frame
+        
+        local btn = Instance.new("Frame")
+        btn.Size = UDim2.new(0, 56, 0, 28)
+        btn.Position = UDim2.new(1, -62, 0.5, -14)
+        btn.BackgroundColor3 = default and Color3.fromRGB(140, 60, 240) or Color3.fromRGB(60, 30, 100)
+        btn.BorderSizePixel = 0
+        btn.Parent = frame
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 14)
+        btnCorner.Parent = btn
+        
+        local slider = Instance.new("Frame")
+        slider.Size = UDim2.new(0, 22, 0, 22)
+        slider.Position = default and UDim2.new(1, -26, 0.5, -11) or UDim2.new(0, 4, 0.5, -11)
+        slider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        slider.BorderSizePixel = 0
+        slider.Parent = btn
+        
+        local sliderCorner = Instance.new("UICorner")
+        sliderCorner.CornerRadius = UDim.new(0, 11)
+        sliderCorner.Parent = slider
+        
+        local statusText = Instance.new("TextLabel")
+        statusText.Size = UDim2.new(1, 0, 1, 0)
+        statusText.BackgroundTransparency = 1
+        statusText.Text = default and "ON" or "OFF"
+        statusText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        statusText.TextSize = 11
+        statusText.Font = Enum.Font.GothamBold
+        statusText.Parent = btn
+        
+        local state = default
+        local function toggle()
+            state = not state
+            Settings[setting] = state
+            
+            btn.BackgroundColor3 = state and Color3.fromRGB(140, 60, 240) or Color3.fromRGB(60, 30, 100)
+            statusText.Text = state and "ON" or "OFF"
+            
+            local targetPos = state and UDim2.new(1, -26, 0.5, -11) or UDim2.new(0, 4, 0.5, -11)
+            slider:TweenPosition(targetPos, Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.2, true)
+        end
+        
+        btn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                toggle()
+            end
+        end)
+        
+        return btn
+    end
+    
+    local function CreateSlider(parent, text, setting, min, max, default)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, -10, 0, 54)
+        frame.BackgroundColor3 = Color3.fromRGB(50, 25, 90)
+        frame.BackgroundTransparency = 0.4
+        frame.BorderSizePixel = 0
+        frame.Parent = parent
+        
+        local frameCorner = Instance.new("UICorner")
+        frameCorner.CornerRadius = UDim.new(0, 10)
+        frameCorner.Parent = frame
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -24, 0, 24)
+        label.Position = UDim2.new(0, 12, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text .. ": " .. tostring(default)
+        label.TextColor3 = Color3.fromRGB(235, 215, 255)
+        label.TextSize = 13
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = frame
+        
+        local sliderContainer = Instance.new("Frame")
+        sliderContainer.Size = UDim2.new(0.85, 0, 0, 8)
+        sliderContainer.Position = UDim2.new(0.05, 0, 0, 32)
+        sliderContainer.BackgroundColor3 = Color3.fromRGB(30, 15, 55)
+        sliderContainer.BorderSizePixel = 0
+        sliderContainer.Parent = frame
+        
+        local sliderCorner = Instance.new("UICorner")
+        sliderCorner.CornerRadius = UDim.new(0, 4)
+        sliderCorner.Parent = sliderContainer
+        
+        local fill = Instance.new("Frame")
+        fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+        fill.BackgroundColor3 = Color3.fromRGB(160, 80, 255)
+        fill.BorderSizePixel = 0
+        fill.Parent = sliderContainer
+        
+        local fillCorner = Instance.new("UICorner")
+        fillCorner.CornerRadius = UDim.new(0, 4)
+        fillCorner.Parent = fill
+        
+        local handle = Instance.new("Frame")
+        handle.Size = UDim2.new(0, 18, 0, 18)
+        handle.Position = UDim2.new((default - min) / (max - min), -9, 0.5, -9)
+        handle.BackgroundColor3 = Color3.fromRGB(200, 150, 255)
+        handle.BorderSizePixel = 0
+        handle.Parent = sliderContainer
+        
+        local handleCorner = Instance.new("UICorner")
+        handleCorner.CornerRadius = UDim.new(0, 9)
+        handleCorner.Parent = handle
+        
+        local handleGlow = Instance.new("Frame")
+        handleGlow.Size = UDim2.new(1, 16, 1, 16)
+        handleGlow.Position = UDim2.new(0, -8, 0, -8)
+        handleGlow.BackgroundColor3 = Color3.fromRGB(160, 80, 255)
+        handleGlow.BackgroundTransparency = 0.8
+        handleGlow.BorderSizePixel = 0
+        handleGlow.Parent = handle
+        
+        local handleGlowCorner = Instance.new("UICorner")
+        handleGlowCorner.CornerRadius = UDim.new(0, 16)
+        handleGlowCorner.Parent = handleGlow
+        
+        local dragging = false
+        local value = default
+        
+        local function updateSlider(input)
+            local pos = math.clamp((input.Position.X - sliderContainer.AbsolutePosition.X) / sliderContainer.AbsoluteSize.X, 0, 1)
+            value = min + pos * (max - min)
+            
+            if setting == "TriggerDelay" then
+                value = math.round(value * 1000) / 1000
+            else
+                value = math.round(value)
+            end
+            
+            Settings[setting] = value
+            fill:TweenSize(UDim2.new(pos, 0, 1, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.1, true)
+            handle:TweenPosition(UDim2.new(pos, -9, 0.5, -9), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.1, true)
+            label.Text = text .. ": " .. tostring(value)
+        end
+        
+        handle.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                updateSlider(input)
+            end
+        end)
+        
+        sliderContainer.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                updateSlider(input)
+            end
+        end)
+        
+        handle.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+        
+        sliderContainer.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+        
+        handle.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                updateSlider(input)
+            end
+        end)
+        
+        sliderContainer.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                updateSlider(input)
+            end
+        end)
+        
+        return sliderContainer
+    end
+    
+    -- ===== ВКЛАДКИ =====
+    -- Aimbot
+    CreateToggle(tabContents[1], "🎯 Aimbot", "Aimbot", Settings.Aimbot)
+    CreateSlider(tabContents[1], "🎯 FOV", "AimbotFOV", 50, 500, Settings.AimbotFOV)
+    CreateSlider(tabContents[1], "🎯 Smoothness", "AimbotSmooth", 1, 10, Settings
