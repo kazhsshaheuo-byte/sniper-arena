@@ -1,4 +1,4 @@
--- Polo Sniper Arena - ULTRA GUI (Красивое + Сохранение + Перетаскивание)
+-- Polo Sniper Arena - ULTRA FAST (Мгновенный аим + Trigger + GUI с вкладками)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,18 +13,21 @@ local AdminIDs = {
     -- Пример: 123456789,
 }
 
--- ===== НАСТРОЙКИ ПО УМОЛЧАНИЮ =====
-local DefaultSettings = {
+-- ===== НАСТРОЙКИ =====
+local Settings = {
+    -- AIMBOT
     Aimbot = true,
     AimbotFOV = 350,
     AimbotKey = Enum.KeyCode.E,
     AimbotWallCheck = true,
-    AimbotSmooth = 1,
+    AimbotSmooth = 1, -- 1 = мгновенно, больше = плавнее
     
+    -- TRIGGER (МАКСИМАЛЬНО БЫСТРЫЙ)
     TriggerBot = true,
-    TriggerDelay = 0.01,
-    TriggerPrecision = 15,
+    TriggerDelay = 0.001, -- Почти без задержки
+    TriggerPrecision = 20, -- Широкий радиус для мгновенного выстрела
     
+    -- VISUALS
     ESP_Box = true,
     ESP_Visible = true,
     ESP_Skeleton = false,
@@ -32,47 +35,15 @@ local DefaultSettings = {
     ESP_Distance = false,
     ESP_TeamCheck = false,
     
+    -- WEAPON
     NoRecoil = true,
     NoSpread = true,
     FastReload = true,
     
+    -- ADMIN
     AdminCheck = true,
     AdminLeave = true,
 }
-
--- ===== ЗАГРУЗКА/СОХРАНЕНИЕ НАСТРОЕК =====
-local function SaveSettings()
-    local data = {}
-    for key, value in pairs(Settings) do
-        if typeof(value) == "EnumItem" then
-            data[key] = tostring(value)
-        else
-            data[key] = value
-        end
-    end
-    pcall(function()
-        writefile("PoloSniperSettings.txt", game:GetService("HttpService"):JSONEncode(data))
-    end)
-end
-
-local function LoadSettings()
-    pcall(function()
-        local data = game:GetService("HttpService"):JSONDecode(readfile("PoloSniperSettings.txt"))
-        for key, value in pairs(data) do
-            if key == "AimbotKey" then
-                Settings[key] = Enum.KeyCode[value:match("%.(%w+)")]
-            else
-                Settings[key] = value
-            end
-        end
-    end)
-end
-
-local Settings = {}
-for key, value in pairs(DefaultSettings) do
-    Settings[key] = value
-end
-LoadSettings()
 
 -- ===== ПЕРЕМЕННЫЕ =====
 local isAimbotKeyPressed = false
@@ -84,6 +55,7 @@ local currentTab = "Aimbot"
 local isDragging = false
 local dragStart = nil
 local dragOffset = nil
+local lastShootTime = 0
 
 -- ===== ПРОВЕРКА АДМИНОВ =====
 local function CheckAdmins()
@@ -148,6 +120,7 @@ local function IsPlayerVisible(character)
     return false
 end
 
+-- ===== МГНОВЕННЫЙ ТРИГГЕРБОТ (БЕЗ ЗАДЕРЖКИ) =====
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     
@@ -312,16 +285,33 @@ local function InstantAim(target)
     end
 end
 
+-- ===== МГНОВЕННЫЙ ВЫСТРЕЛ (БЕЗ ЗАДЕРЖКИ) =====
 local function InstantShoot()
     if not canShoot then return end
     canShoot = false
     
+    -- Сразу стреляем без задержки
     pcall(function()
         mouse1click()
     end)
     
+    -- Минимальная задержка для предотвращения спама
     task.wait(Settings.TriggerDelay)
     canShoot = true
+end
+
+-- ===== СУПЕР БЫСТРЫЙ ВЫСТРЕЛ (ЧЕРЕЗ TASK.SPAWN) =====
+local function SuperFastShoot()
+    if not canShoot then return end
+    canShoot = false
+    
+    task.spawn(function()
+        pcall(function()
+            mouse1click()
+        end)
+        task.wait(Settings.TriggerDelay)
+        canShoot = true
+    end)
 end
 
 local function ApplyWeaponMods()
@@ -400,7 +390,6 @@ local function DrawSkeleton(character)
     if lower and rLeg then drawLine(lower, rLeg, color) end
 end
 
--- ===== ESP DISTANCE =====
 local function DrawDistance(character)
     if not character or not character:FindFirstChild("Head") then return end
     
@@ -422,7 +411,6 @@ local function DrawDistance(character)
     end
 end
 
--- ===== ESP LINE =====
 local function DrawLineToPlayer(character)
     if not character or not character:FindFirstChild("Head") then return end
     
@@ -481,7 +469,7 @@ local function CreateGUI()
     corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = mainFrame
     
-    -- Title Bar (для перетаскивания)
+    -- Title Bar
     local titleBar = Instance.new("Frame")
     titleBar.Size = UDim2.new(1, 0, 0, 45)
     titleBar.Position = UDim2.new(0, 0, 0, 0)
@@ -519,10 +507,7 @@ local function CreateGUI()
     closeCorner.CornerRadius = UDim.new(0, 8)
     closeCorner.Parent = closeBtn
     
-    -- ===== ПЕРЕТАСКИВАНИЕ =====
-    local dragStart = nil
-    local dragOffset = nil
-    
+    -- Перетаскивание
     titleBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             isDragging = true
@@ -549,7 +534,7 @@ local function CreateGUI()
         end
     end)
     
-    -- ===== ВКЛАДКИ =====
+    -- Вкладки
     local tabFrame = Instance.new("Frame")
     tabFrame.Size = UDim2.new(1, 0, 0, 38)
     tabFrame.Position = UDim2.new(0, 0, 0, 45)
@@ -581,7 +566,6 @@ local function CreateGUI()
         
         tabButtons[i] = btn
         
-        -- Контент вкладки
         local content = Instance.new("ScrollingFrame")
         content.Size = UDim2.new(1, -10, 1, -88)
         content.Position = UDim2.new(0, 5, 0, 88)
@@ -607,7 +591,6 @@ local function CreateGUI()
         end)
     end
     
-    -- ===== ФУНКЦИИ СОЗДАНИЯ ЭЛЕМЕНТОВ =====
     local function CreateToggle(parent, text, setting, default)
         local frame = Instance.new("Frame")
         frame.Size = UDim2.new(1, -10, 0, 36)
@@ -652,7 +635,6 @@ local function CreateGUI()
             Settings[setting] = state
             btn.BackgroundColor3 = state and Color3.fromRGB(130, 60, 230) or Color3.fromRGB(60, 30, 100)
             btn.Text = state and "ON" or "OFF"
-            SaveSettings()
         end)
         
         return btn
@@ -709,14 +691,13 @@ local function CreateGUI()
             local pos = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
             value = min + pos * (max - min)
             if setting == "TriggerDelay" then
-                value = math.round(value * 100) / 100
+                value = math.round(value * 1000) / 1000
             else
                 value = math.round(value)
             end
             Settings[setting] = value
             fill.Size = UDim2.new(pos, 0, 1, 0)
             label.Text = text .. ": " .. tostring(value)
-            SaveSettings()
         end
         
         slider.InputBegan:Connect(function(input)
@@ -747,10 +728,10 @@ local function CreateGUI()
     CreateSlider(tabContents[1], "🎯 Smoothness", "AimbotSmooth", 1, 10, Settings.AimbotSmooth)
     CreateToggle(tabContents[1], "🧱 Wall Check", "AimbotWallCheck", Settings.AimbotWallCheck)
     
-    -- ===== ВКЛАДКА TRIGGER =====
+    -- ===== ВКЛАДКА TRIGGER (МАКСИМАЛЬНО БЫСТРЫЙ) =====
     CreateToggle(tabContents[2], "🔫 TriggerBot", "TriggerBot", Settings.TriggerBot)
     CreateSlider(tabContents[2], "🎯 Precision", "TriggerPrecision", 5, 40, Settings.TriggerPrecision)
-    CreateSlider(tabContents[2], "⏱️ Delay (sec)", "TriggerDelay", 1, 20, Settings.TriggerDelay * 100)
+    CreateSlider(tabContents[2], "⏱️ Delay (ms)", "TriggerDelay", 1, 50, Settings.TriggerDelay * 1000)
     
     -- ===== ВКЛАДКА VISUALS =====
     CreateToggle(tabContents[3], "📦 ESP Box", "ESP_Box", Settings.ESP_Box)
@@ -769,7 +750,6 @@ local function CreateGUI()
     CreateToggle(tabContents[5], "🛡️ Admin Check", "AdminCheck", Settings.AdminCheck)
     CreateToggle(tabContents[5], "🚪 Auto Leave", "AdminLeave", Settings.AdminLeave)
     
-    -- Кнопка закрытия
     local guiOpen = true
     closeBtn.MouseButton1Click:Connect(function()
         guiOpen = not guiOpen
@@ -870,13 +850,15 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
+    -- ===== ТРИГГЕРБОТ (МАКСИМАЛЬНО БЫСТРЫЙ) =====
     if Settings.TriggerBot and canShoot then
         local target = GetTriggerTarget()
         if target then
             if IsAimingAtHead(target) then
                 local humanoid = target.Character:FindFirstChild("Humanoid")
                 if humanoid and humanoid.Health > 0 then
-                    InstantShoot()
+                    -- Используем супер быстрый выстрел
+                    SuperFastShoot()
                 end
             end
         end
@@ -902,7 +884,7 @@ pcall(function()
     })
 end)
 
-print("=== Polo Sniper Arena ULTRA GUI loaded ===")
+print("=== Polo Sniper Arena ULTRA FAST loaded ===")
 print("Right Shift - toggle GUI")
 print("E - hold for aimbot")
-print("Drag title bar to move GUI")
+print("TriggerBot - МАКСИМАЛЬНО БЫСТРЫЙ (0.001 сек)")
