@@ -1,4 +1,4 @@
--- Polo Sniper Arena - FAST AIMBOT
+-- Polo Sniper Arena - PERFECT AIMBOT
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,13 +8,13 @@ local Mouse = LocalPlayer:GetMouse()
 
 local Settings = {
     Aimbot = true,
-    AimbotSmooth = 3,
-    AimbotFOV = 300,
+    AimbotSmooth = 1.5,
+    AimbotFOV = 350,
     AimbotKey = Enum.KeyCode.E,
     
     TriggerBot = true,
     TriggerDelay = 0.03,
-    TriggerPrecision = 20,
+    TriggerPrecision = 8,
     
     ESP_Box = true,
     ESP_Visible = true,
@@ -28,6 +28,7 @@ local Settings = {
 local isAimbotKeyPressed = false
 local Drawings = {}
 local canShoot = true
+local lastTarget = nil
 
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
@@ -38,6 +39,7 @@ end)
 UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
         isAimbotKeyPressed = false
+        lastTarget = nil
     end
 end)
 
@@ -79,15 +81,27 @@ end
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     
-    local headPos = GetHeadPosition(target.Character)
-    if not headPos then return false end
+    local head = target.Character:FindFirstChild("Head")
+    if not head then return false end
     
-    local screenPos = Camera:WorldToViewportPoint(headPos)
+    local headPos = head.Position
+    local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
+    
+    if not onScreen then return false end
+    
     local mousePos = UserInputService:GetMouseLocation()
-    
     local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
     
-    return dist < Settings.TriggerPrecision
+    if dist > Settings.TriggerPrecision then
+        return false
+    end
+    
+    local humanoid = target.Character:FindFirstChild("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then
+        return false
+    end
+    
+    return true
 end
 
 local function GetTriggerTarget()
@@ -134,7 +148,7 @@ local function GetClosestPlayer()
             if headPos then
                 local pos, onScreen = Camera:WorldToViewportPoint(headPos)
                 
-                if pos.Z > 0 then
+                if onScreen and pos.Z > 0 then
                     local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                     if dist < closestDist and dist < Settings.AimbotFOV then
                         closestDist = dist
@@ -252,24 +266,33 @@ RunService.RenderStepped:Connect(function()
     
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
-        if target then
-            local headPos = GetHeadPosition(target.Character)
-            if headPos then
-                local screenPos = Camera:WorldToViewportPoint(headPos)
-                local mousePos = UserInputService:GetMouseLocation()
-                
-                local deltaX = screenPos.X - mousePos.X
-                local deltaY = screenPos.Y - mousePos.Y
-                
-                if math.abs(deltaX) > 50 or math.abs(deltaY) > 50 then
-                    pcall(function()
-                        mousemoverel(deltaX / 2, deltaY / 2)
-                    end)
-                else
-                    pcall(function()
-                        mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
-                    end)
+        
+        if not target then
+            lastTarget = nil
+            return
+        end
+        
+        lastTarget = target
+        
+        local headPos = GetHeadPosition(target.Character)
+        if headPos then
+            local screenPos = Camera:WorldToViewportPoint(headPos)
+            local mousePos = UserInputService:GetMouseLocation()
+            
+            local deltaX = screenPos.X - mousePos.X
+            local deltaY = screenPos.Y - mousePos.Y
+            
+            local distance = math.sqrt(deltaX * deltaX + deltaY * deltaY)
+            
+            if distance > 3 then
+                local smoothFactor = 1.2
+                if distance > 100 then
+                    smoothFactor = 1
                 end
+                
+                pcall(function()
+                    mousemoverel(deltaX / smoothFactor, deltaY / smoothFactor)
+                end)
             end
         end
     end
