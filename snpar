@@ -1,4 +1,4 @@
--- Polo Sniper Arena - ULTIMATE (Aimbot + TriggerBot + ESP + FOV + WallCheck)
+-- Polo Sniper Arena - ULTRA AIMBOT (Для Sniper Arena, без отставания + WallCheck)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,8 +8,9 @@ local Mouse = LocalPlayer:GetMouse()
 
 local Settings = {
     Aimbot = true,
-    AimbotFOV = 350,
+    AimbotFOV = 300,
     AimbotKey = Enum.KeyCode.E,
+    AimbotWallCheck = true, -- ВКЛЮЧЕНА ПРОВЕРКА СТЕН ДЛЯ АИМБОТА
     
     TriggerBot = true,
     TriggerDelay = 0.03,
@@ -28,7 +29,6 @@ local isAimbotKeyPressed = false
 local Drawings = {}
 local canShoot = true
 local currentTarget = nil
-local lastHeadPos = nil
 
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
@@ -40,7 +40,6 @@ UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
         isAimbotKeyPressed = false
         currentTarget = nil
-        lastHeadPos = nil
     end
 end)
 
@@ -52,6 +51,7 @@ local function GetHeadPosition(character)
     return nil
 end
 
+-- ===== ПРОВЕРКА ВИДИМОСТИ (WALL CHECK) =====
 local function IsPlayerVisible(character)
     if not character or not character:FindFirstChild("Head") then
         return false
@@ -136,11 +136,13 @@ local function GetTriggerTarget()
     return bestTarget
 end
 
+-- ===== ПОЛУЧЕНИЕ БЛИЖАЙШЕГО ИГРОКА (С WALL CHECK ДЛЯ АИМА) =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = math.huge
     local mousePos = UserInputService:GetMouseLocation()
     
+    -- Сначала проверяем текущую цель
     if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("Head") then
         local headPos = GetHeadPosition(currentTarget.Character)
         if headPos then
@@ -148,7 +150,17 @@ local function GetClosestPlayer()
             if onScreen and pos.Z > 0 then
                 local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                 if dist < Settings.AimbotFOV then
-                    return currentTarget
+                    -- Проверяем видимость цели
+                    if Settings.AimbotWallCheck then
+                        if IsPlayerVisible(currentTarget.Character) then
+                            return currentTarget
+                        else
+                            -- Если цель за стеной, ищем другую
+                            currentTarget = nil
+                        end
+                    else
+                        return currentTarget
+                    end
                 end
             end
         end
@@ -157,8 +169,16 @@ local function GetClosestPlayer()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
-            local headPos = GetHeadPosition(character)
             
+            -- ===== WALL CHECK ДЛЯ АИМБОТА =====
+            if Settings.AimbotWallCheck then
+                -- ПРОПУСКАЕМ ИГРОКОВ ЗА СТЕНАМИ
+                if not IsPlayerVisible(character) then
+                    continue
+                end
+            end
+            
+            local headPos = GetHeadPosition(character)
             if headPos then
                 local pos, onScreen = Camera:WorldToViewportPoint(headPos)
                 
@@ -178,6 +198,44 @@ local function GetClosestPlayer()
     end
     
     return closest
+end
+
+-- ===== АИМ ДЛЯ SNIPER ARENA (С WALL CHECK) =====
+local function AimAtHeadSniper(target)
+    if not target or not target.Character then return end
+    
+    local character = target.Character
+    
+    -- Дополнительная проверка видимости перед наведением
+    if Settings.AimbotWallCheck then
+        if not IsPlayerVisible(character) then
+            return
+        end
+    end
+    
+    local headPos = GetHeadPosition(character)
+    if not headPos then return end
+    
+    local camPos = Camera.CFrame.Position
+    local direction = (headPos - camPos).Unit
+    local newCF = CFrame.lookAt(camPos, headPos)
+    
+    -- Плавно поворачиваем камеру
+    Camera.CFrame = Camera.CFrame:Lerp(newCF, 0.5)
+    
+    -- Движение мыши (для точности)
+    local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
+    if onScreen then
+        local mousePos = UserInputService:GetMouseLocation()
+        local deltaX = screenPos.X - mousePos.X
+        local deltaY = screenPos.Y - mousePos.Y
+        
+        if math.abs(deltaX) > 1 or math.abs(deltaY) > 1 then
+            pcall(function()
+                mousemoverel(deltaX, deltaY)
+            end)
+        end
+    end
 end
 
 local function Shoot()
@@ -260,7 +318,7 @@ RunService.RenderStepped:Connect(function()
                 if not highlight then
                     highlight = Instance.new("Highlight", character)
                     highlight.Name = "PoloESP"
-                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                    highlight.FillColor = isVisible and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 255, 0)
                     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
                     highlight.FillTransparency = 0.3
                     if Settings.ESP_Visible then
@@ -285,22 +343,8 @@ RunService.RenderStepped:Connect(function()
     
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
-        
         if target then
-            local headPos = GetHeadPosition(target.Character)
-            if headPos then
-                local screenPos = Camera:WorldToViewportPoint(headPos)
-                local mousePos = UserInputService:GetMouseLocation()
-                
-                local deltaX = screenPos.X - mousePos.X
-                local deltaY = screenPos.Y - mousePos.Y
-                
-                if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
-                    pcall(function()
-                        mousemoverel(deltaX, deltaY)
-                    end)
-                end
-            end
+            AimAtHeadSniper(target)
         end
     end
     
@@ -312,7 +356,10 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Polo Sniper Arena",
-        Text = "Loaded | Hold E for aimbot",
+        Text = "Aimbot (E) | WallCheck ON",
         Duration = 3
     })
 end)
+
+print("=== Polo Sniper Arena loaded ===")
+print("Hold E for aimbot | WallCheck: ON")
