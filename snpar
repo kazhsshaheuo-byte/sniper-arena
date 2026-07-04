@@ -1,4 +1,4 @@
--- Polo Sniper Arena - ULTIMATE AIMBOT (НУЛЕВОЕ ОТСТАВАНИЕ)
+-- Polo Sniper Arena - ULTIMATE (Aimbot + TriggerBot + ESP + FOV + WallCheck)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,12 +8,12 @@ local Mouse = LocalPlayer:GetMouse()
 
 local Settings = {
     Aimbot = true,
-    AimbotFOV = 400,
+    AimbotFOV = 350,
     AimbotKey = Enum.KeyCode.E,
     
     TriggerBot = true,
     TriggerDelay = 0.03,
-    TriggerPrecision = 12,
+    TriggerPrecision = 10,
     
     ESP_Box = true,
     ESP_Visible = true,
@@ -22,56 +22,14 @@ local Settings = {
     NoRecoil = true,
     NoSpread = true,
     FastReload = true,
-    
-    AutoReinject = true,
 }
 
 local isAimbotKeyPressed = false
 local Drawings = {}
 local canShoot = true
-local scriptRunning = true
 local currentTarget = nil
 local lastHeadPos = nil
-local predictionEnabled = true
 
--- ===== АВТО-РЕИНЖЕКТ =====
-local function StartAutoReinject()
-    if not Settings.AutoReinject then return end
-    
-    local function CheckReconnect()
-        while scriptRunning do
-            wait(1)
-            if not LocalPlayer or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("Humanoid") then
-                repeat wait(0.5) until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-                wait(0.5)
-                for _, player in pairs(Players:GetPlayers()) do
-                    if player ~= LocalPlayer then
-                        local char = player.Character
-                        if char then
-                            local esp = char:FindFirstChild("PoloESP")
-                            if esp then esp:Destroy() end
-                        end
-                    end
-                end
-                canShoot = true
-                isAimbotKeyPressed = false
-                currentTarget = nil
-                lastHeadPos = nil
-                pcall(function()
-                    game:GetService("StarterGui"):SetCore("SendNotification", {
-                        Title = "Polo Sniper Arena",
-                        Text = "Auto-Reinject: Restarted!",
-                        Duration = 2
-                    })
-                end)
-                print("[Polo] Auto-Reinject: Script restarted")
-            end
-        end
-    end
-    spawn(function() CheckReconnect() end)
-end
-
--- ===== KEY BINDINGS =====
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
         isAimbotKeyPressed = true
@@ -86,7 +44,6 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- ===== ФУНКЦИИ =====
 local function GetHeadPosition(character)
     local head = character:FindFirstChild("Head")
     if head then
@@ -179,13 +136,11 @@ local function GetTriggerTarget()
     return bestTarget
 end
 
--- ===== УЛУЧШЕННЫЙ ПОИСК ЦЕЛИ С ПРИОРИТЕТОМ =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = math.huge
     local mousePos = UserInputService:GetMouseLocation()
     
-    -- Сначала проверяем текущую цель (для стабильности)
     if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("Head") then
         local headPos = GetHeadPosition(currentTarget.Character)
         if headPos then
@@ -199,7 +154,6 @@ local function GetClosestPlayer()
         end
     end
     
-    -- Ищем новую цель
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
@@ -282,9 +236,6 @@ local function DrawFOV()
     table.insert(Drawings, dot)
 end
 
-StartAutoReinject()
-
--- ===== ГЛАВНЫЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
     for _, drawing in pairs(Drawings) do
         pcall(function() drawing:Remove() end)
@@ -332,39 +283,24 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== СУПЕР-БЫСТРЫЙ АИМБОТ =====
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         
         if target then
             local headPos = GetHeadPosition(target.Character)
             if headPos then
-                -- Сохраняем позицию для предсказания
-                if lastHeadPos then
-                    -- Предсказываем движение (если включено)
-                    if predictionEnabled then
-                        local velocity = (headPos - lastHeadPos) * 1.2
-                        headPos = headPos + velocity
-                    end
-                end
-                lastHeadPos = headPos
-                
                 local screenPos = Camera:WorldToViewportPoint(headPos)
                 local mousePos = UserInputService:GetMouseLocation()
                 
                 local deltaX = screenPos.X - mousePos.X
                 local deltaY = screenPos.Y - mousePos.Y
                 
-                -- Мгновенное наведение без задержек
                 if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
                     pcall(function()
-                        -- Компенсируем задержку рендера
-                        mousemoverel(deltaX * 1.05, deltaY * 1.05)
+                        mousemoverel(deltaX, deltaY)
                     end)
                 end
             end
-        else
-            lastHeadPos = nil
         end
     end
     
@@ -376,11 +312,7 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Polo Sniper Arena",
-        Text = "ULTIMATE AIMBOT | Hold E",
+        Text = "Loaded | Hold E for aimbot",
         Duration = 3
     })
 end)
-
-print("=== Polo Sniper Arena ULTIMATE loaded ===")
-print("Hold E for instant aimbot")
-print("Prediction: ON (нулевое отставание)")
