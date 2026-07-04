@@ -20,12 +20,12 @@ local Settings = {
     AimbotFOV = 350,
     AimbotKey = Enum.KeyCode.E,
     AimbotWallCheck = true,
-    AimbotSmooth = 1, -- 1 = мгновенно, больше = плавнее
+    AimbotSmooth = 1,
     
-    -- TRIGGER (МАКСИМАЛЬНО БЫСТРЫЙ)
+    -- TRIGGER
     TriggerBot = true,
-    TriggerDelay = 0.001, -- Почти без задержки
-    TriggerPrecision = 20, -- Широкий радиус для мгновенного выстрела
+    TriggerDelay = 0.001,
+    TriggerPrecision = 20,
     
     -- VISUALS
     ESP_Box = true,
@@ -120,7 +120,6 @@ local function IsPlayerVisible(character)
     return false
 end
 
--- ===== МГНОВЕННЫЙ ТРИГГЕРБОТ (БЕЗ ЗАДЕРЖКИ) =====
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     
@@ -285,22 +284,6 @@ local function InstantAim(target)
     end
 end
 
--- ===== МГНОВЕННЫЙ ВЫСТРЕЛ (БЕЗ ЗАДЕРЖКИ) =====
-local function InstantShoot()
-    if not canShoot then return end
-    canShoot = false
-    
-    -- Сразу стреляем без задержки
-    pcall(function()
-        mouse1click()
-    end)
-    
-    -- Минимальная задержка для предотвращения спама
-    task.wait(Settings.TriggerDelay)
-    canShoot = true
-end
-
--- ===== СУПЕР БЫСТРЫЙ ВЫСТРЕЛ (ЧЕРЕЗ TASK.SPAWN) =====
 local function SuperFastShoot()
     if not canShoot then return end
     canShoot = false
@@ -483,9 +466,9 @@ local function CreateGUI()
     title.Size = UDim2.new(0.8, 0, 1, 0)
     title.Position = UDim2.new(0, 15, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "✨ Polo Sniper Arena ✨"
+    title.Text = "🔫 Sniper Arena Script | by wizzey"
     title.TextColor3 = Color3.fromRGB(230, 200, 255)
-    title.TextSize = 18
+    title.TextSize = 16
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Font = Enum.Font.GothamBold
     title.Parent = titleBar
@@ -728,7 +711,7 @@ local function CreateGUI()
     CreateSlider(tabContents[1], "🎯 Smoothness", "AimbotSmooth", 1, 10, Settings.AimbotSmooth)
     CreateToggle(tabContents[1], "🧱 Wall Check", "AimbotWallCheck", Settings.AimbotWallCheck)
     
-    -- ===== ВКЛАДКА TRIGGER (МАКСИМАЛЬНО БЫСТРЫЙ) =====
+    -- ===== ВКЛАДКА TRIGGER =====
     CreateToggle(tabContents[2], "🔫 TriggerBot", "TriggerBot", Settings.TriggerBot)
     CreateSlider(tabContents[2], "🎯 Precision", "TriggerPrecision", 5, 40, Settings.TriggerPrecision)
     CreateSlider(tabContents[2], "⏱️ Delay (ms)", "TriggerDelay", 1, 50, Settings.TriggerDelay * 1000)
@@ -850,14 +833,12 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== ТРИГГЕРБОТ (МАКСИМАЛЬНО БЫСТРЫЙ) =====
     if Settings.TriggerBot and canShoot then
         local target = GetTriggerTarget()
         if target then
             if IsAimingAtHead(target) then
                 local humanoid = target.Character:FindFirstChild("Humanoid")
                 if humanoid and humanoid.Health > 0 then
-                    -- Используем супер быстрый выстрел
                     SuperFastShoot()
                 end
             end
@@ -878,13 +859,13 @@ end)
 
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Polo Sniper Arena",
-        Text = "Right Shift - GUI | E - Aimbot | Drag to move",
+        Title = "Sniper Arena Script",
+        Text = "by wizzey | Right Shift - GUI | E - Aimbot",
         Duration = 3
     })
 end)
 
-print("=== Polo Sniper Arena ULTRA FAST loaded ===")
+print("=== Sniper Arena Script by wizzey loaded ===")
 print("Right Shift - toggle GUI")
 print("E - hold for aimbot")
-print("TriggerBot - МАКСИМАЛЬНО БЫСТРЫЙ (0.001 сек)")
+print("Drag title bar to move GUI")
