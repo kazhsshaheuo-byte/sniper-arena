@@ -1,33 +1,85 @@
--- ===== ИДЕАЛЬНЫЙ ТРИГГЕРБОТ (ТОЛЬКО ТОЧНЫЕ ВЫСТРЕЛЫ В ГОЛОВУ) =====
--- ВСТАВЬТЕ ЭТУ ФУНКЦИЮ В ОСНОВНОЙ СКРИПТ ВМЕСТО СТАРОГО ТРИГГЕРА
+-- Зависимости и сервисы Roblox
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- Таблица настроек (Инициализация)
+local Settings = {
+    TriggerBot = false,
+    TriggerPrecision = 15, -- Дефолтная точность (радиус в пикселях)
+    Mode = "Комбинированный" -- Режим по умолчанию
+}
+
+local canShoot = true
+
+-- Заглушки для функций выстрела и поиска целей (замените на свои, если есть в основном скрипте)
+local function InstantShoot()
+    print("[TriggerBot]: Выстрел!")
+    -- Сюда идет ваш код клика/выстрела, например: mouse1click()
+end
+
+local function GetTriggerTarget()
+    local mousePos = UserInputService:GetMouseLocation()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
+                if onScreen then
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if dist < shortestDistance and dist < 150 then -- Радиус обзора триггера
+                        shortestDistance = dist
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+    end
+    return closestPlayer
+end
+
+local function GetClosestPlayer()
+    return GetTriggerTarget()
+end
+
+-- ==========================================
+-- Исправленная логика Триггербота
+-- ==========================================
 
 local function GetHeadWorldPosition(target)
     if not target or not target.Character then return nil end
-    
     local head = target.Character:FindFirstChild("Head")
-    if not head then return nil end
-    
-    -- Получаем точную позицию головы с учетом анимаций
-    return head.Position
+    return head and head.Position or nil
 end
 
-local function GetHeadScreenPosition(target)
-    if not target or not target.Character then return nil, false end
-    
-    local headPos = GetHeadWorldPosition(target)
-    if not headPos then return nil, false end
-    
-    local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
-    return screenPos, onScreen
-end
-
--- ===== ПРОВЕРКА ТОЧНОГО НАВЕДЕНИЯ С УЧЕТОМ ДИСТАНЦИИ =====
-local function IsPerfectAimingAtHead(target)
+local function IsHeadVisible(target)
     if not target or not target.Character then return false end
-    
     local head = target.Character:FindFirstChild("Head")
     if not head then return false end
     
+    local origin = Camera.CFrame.Position
+    local direction = head.Position - origin
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, target.Character}
+    
+    local raycastResult = Workspace:Raycast(origin, direction, raycastParams)
+    
+    if not raycastResult then return true end
+    return raycastResult.Instance:IsDescendantOf(target.Character)
+end
+
+local function IsPerfectAimingAtHead(target)
+    if not target or not target.Character then return false end
     local headPos = GetHeadWorldPosition(target)
     if not headPos then return false end
     
@@ -37,139 +89,43 @@ local function IsPerfectAimingAtHead(target)
     local mousePos = UserInputService:GetMouseLocation()
     local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
     
-    -- Динамическая точность в зависимости от расстояния
     local distance = (Camera.CFrame.Position - headPos).Magnitude
     local precision = Settings.TriggerPrecision
     
-    -- На большом расстоянии точность выше (меньше погрешность)
     if distance > 200 then
         precision = precision * 0.6
     elseif distance > 100 then
         precision = precision * 0.8
     end
     
-    -- Проверяем что прицел точно на голове
-    if dist > precision then
-        return false
-    end
+    if dist > precision then return false end
     
-    -- Проверяем что игрок жив
     local humanoid = target.Character:FindFirstChild("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then
-        return false
-    end
-    
-    return true
+    return humanoid and humanoid.Health > 0
 end
 
--- ===== ПРОВЕРКА ВИДИМОСТИ С ТОЧНОСТЬЮ =====
-local function IsHeadVisible(target)
-    if not target or not target.Character then return false end
-    
-    local head = target.Character:FindFirstChild("Head")
-    if not head then return false end
-    
-    local origin = Camera.CFrame.Position
-    local direction = (head.Position - origin).Unit * (head.Position - origin).Magnitude
-    
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, target.Character}
-    
-    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
-    
-    if not raycastResult then
-        return true
-    end
-    
-    local hitPart = raycastResult.Instance
-    if hitPart and hitPart:IsDescendantOf(target.Character) then
-        return true
-    end
-    
-    return false
-end
-
--- ===== ИДЕАЛЬНЫЙ ТРИГГЕРБОТ =====
 local function PerfectTriggerBot()
     if not Settings.TriggerBot or not canShoot then return end
-    
     local target = GetTriggerTarget()
-    if not target then return end
+    if not target or not IsHeadVisible(target) or not IsPerfectAimingAtHead(target) then return end
     
-    -- Проверка 1: Видимость головы
-    if not IsHeadVisible(target) then
-        return
-    end
-    
-    -- Проверка 2: Точное наведение на голову
-    if not IsPerfectAimingAtHead(target) then
-        return
-    end
-    
-    -- Проверка 3: Жив ли игрок
-    local humanoid = target.Character:FindFirstChild("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then
-        return
-    end
-    
-    -- Проверка 4: Есть ли у нас оружие
-    local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
     if not tool then return end
     
-    -- Проверка 5: Готово ли оружие к выстрелу
-    local isReady = true
     for _, child in pairs(tool:GetDescendants()) do
-        if child:IsA("NumberValue") and child.Name:lower():find("cooldown") then
-            if child.Value > 0 then
-                isReady = false
-            end
+        if child:IsA("NumberValue") and child.Name:lower():find("cooldown") and child.Value > 0 then
+            return
         end
     end
     
-    if not isReady then return end
-    
-    -- ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ - МГНОВЕННЫЙ ВЫСТРЕЛ
     InstantShoot()
 end
 
--- ===== ЗАМЕНА СТАРОГО ТРИГГЕРА В ОСНОВНОМ ЦИКЛЕ =====
--- ЗАМЕНИТЕ ЭТУ ЧАСТЬ В ОСНОВНОМ ЦИКЛЕ:
-
--- СТАРЫЙ КОД (удалить):
--- if Settings.TriggerBot and canShoot then
---     local target = GetTriggerTarget()
---     if target then
---         if IsAimingAtHead(target) then
---             local humanoid = target.Character:FindFirstChild("Humanoid")
---             if humanoid and humanoid.Health > 0 then
---                 InstantShoot()
---             end
---         end
---     end
--- end
-
--- НОВЫЙ КОД (вставить):
--- if Settings.TriggerBot then
---     PerfectTriggerBot()
--- end
-
--- ===== АЛЬТЕРНАТИВНЫЙ ВАРИАНТ С ПРЕДВАРИТЕЛЬНЫМ НАВЕДЕНИЕМ =====
 local function SmartTriggerBot()
     if not Settings.TriggerBot or not canShoot then return end
+    local target = GetClosestPlayer()
+    if not target or not IsHeadVisible(target) then return end
     
-    local target = GetClosestPlayer() -- Используем аимбот для поиска цели
-    if not target then return end
-    
-    local character = target.Character
-    if not character then return end
-    
-    -- Проверяем видимость
-    if not IsHeadVisible(target) then
-        return
-    end
-    
-    -- Получаем позицию головы
     local headPos = GetHeadWorldPosition(target)
     if not headPos then return end
     
@@ -179,16 +135,14 @@ local function SmartTriggerBot()
     local mousePos = UserInputService:GetMouseLocation()
     local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
     
-    -- Если прицел рядом с головой - доводим и стреляем
     if dist < 50 then
-        -- Доводим прицел до головы
         local deltaX = screenPos.X - mousePos.X
         local deltaY = screenPos.Y - mousePos.Y
-        pcall(function()
-            mousemoverel(deltaX * 0.3, deltaY * 0.3)
-        end)
         
-        -- Проверяем точность после доводки
+        if mousemoverel then
+            pcall(function() mousemoverel(deltaX * 0.3, deltaY * 0.3) end)
+        end
+        
         local newMousePos = UserInputService:GetMouseLocation()
         local newDist = (Vector2.new(screenPos.X, screenPos.Y) - newMousePos).Magnitude
         
@@ -201,81 +155,323 @@ local function SmartTriggerBot()
     end
 end
 
--- ===== САМЫЙ ТОЧНЫЙ ТРИГГЕР (С ПРОВЕРКОЙ ПОЛЯРНЫХ КООРДИНАТ) =====
 local function UltraPreciseTriggerBot()
     if not Settings.TriggerBot or not canShoot then return end
-    
     local target = GetTriggerTarget()
     if not target then return end
     
-    -- Проверка на живого игрока
-    local humanoid = target.Character:FindFirstChild("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then return end
+    local humanoid = target.Character and target.Character:FindFirstChild("Humanoid")
+    if not humanoid or humanoid.Health <= 0 or not IsHeadVisible(target) then return end
     
-    -- Проверка видимости
-    if not IsHeadVisible(target) then return end
-    
-    -- Получаем позицию головы в 3D пространстве
     local headPos = GetHeadWorldPosition(target)
     if not headPos then return end
     
-    -- Получаем направление от камеры к голове
     local camPos = Camera.CFrame.Position
     local directionToHead = (headPos - camPos).Unit
-    
-    -- Получаем направление прицела камеры
     local camDirection = Camera.CFrame.LookVector
     
-    -- Вычисляем угол между направлением камеры и головой
     local angle = math.acos(math.clamp(camDirection:Dot(directionToHead), -1, 1))
-    local angleDeg = math.deg(angle)
+    if math.deg(angle) > 0.5 then return end
     
-    -- Проверяем что угол меньше 0.5 градуса (почти идеальное наведение)
-    if angleDeg > 0.5 then
-        return
-    end
-    
-    -- Проверка что голова находится в центре экрана (по пикселям)
     local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
     if not onScreen then return end
     
     local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     local pixelDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
     
-    -- Проверяем что голова в радиусе 30 пикселей от центра
-    if pixelDist > 30 then
-        return
-    end
-    
-    -- ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ - ВЫСТРЕЛ
-    InstantShoot()
-end
-
--- ===== ИСПОЛЬЗОВАНИЕ В ОСНОВНОМ ЦИКЛЕ =====
--- ВСТАВЬТЕ В ОСНОВНОЙ ЦИКЛ ВМЕСТО СТАРОГО ТРИГГЕРА:
-
--- Вариант 1: Идеальный триггер (только точные выстрелы)
--- if Settings.TriggerBot then
---     PerfectTriggerBot()
--- end
-
--- Вариант 2: Умный триггер (доводит до головы и стреляет)
--- if Settings.TriggerBot then
---     SmartTriggerBot()
--- end
-
--- Вариант 3: Самый точный (с проверкой угла)
--- if Settings.TriggerBot then
---     UltraPreciseTriggerBot()
--- end
-
--- Вариант 4: Комбинированный (рекомендую)
-if Settings.TriggerBot then
-    -- Сначала пытаемся сделать точный выстрел
-    UltraPreciseTriggerBot()
-    
-    -- Если не вышло, пробуем умный триггер
-    if canShoot then
-        SmartTriggerBot()
+    if pixelDist <= 30 then
+        InstantShoot()
     end
 end
+
+-- Основной цикл работы скрипта
+task.spawn(function()
+    while task.wait() do
+        if Settings.TriggerBot then
+            if Settings.Mode == "Идеальный" then
+                PerfectTriggerBot()
+            elseif Settings.Mode == "Умный" then
+                SmartTriggerBot()
+            elseif Settings.Mode == "Точный" then
+                UltraPreciseTriggerBot()
+            elseif Settings.Mode == "Комбинированный" then
+                UltraPreciseTriggerBot()
+                if canShoot then
+                    SmartTriggerBot()
+                end
+            end
+        end
+    end
+end)
+
+
+-- ==========================================
+-- СОЗДАНИЕ УЛЬТРА-КРАСИВОГО GUI (DARK + PURPLE GLOW)
+-- ==========================================
+
+-- Удаление старого интерфейса, если он существовал
+if CoreGui:FindFirstChild("PurpleTriggerGui") then
+    CoreGui.PurpleTriggerGui:Destroy()
+end
+
+local PurpleTriggerGui = Instance.new("ScreenGui")
+PurpleTriggerGui.Name = "PurpleTriggerGui"
+PurpleTriggerGui.Parent = CoreGui
+PurpleTriggerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- ТЕНЬ / СВЕЧЕНИЕ (Glow Effect)
+local GlowFrame = Instance.new("Frame")
+GlowFrame.Name = "GlowFrame"
+GlowFrame.Position = UDim2.new(0.5, -165, 0.5, -140)
+GlowFrame.Size = UDim2.new(0, 330, 0, 280)
+GlowFrame.BackgroundColor3 = Color3.fromRGB(18, 16, 24)
+GlowFrame.BorderSizePixel = 0
+GlowFrame.Active = true
+GlowFrame.Draggable = true -- Позволяет перетаскивать меню мышкой
+GlowFrame.Parent = PurpleTriggerGui
+
+local GlowCorner = Instance.new("UICorner")
+GlowCorner.CornerRadius = UDim.new(0, 12)
+GlowCorner.Parent = GlowFrame
+
+-- Фиолетовая неоновая обводка (Glow / Stroke)
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(157, 78, 221) -- Яркий фиолетовый
+UIStroke.Thickness = 2.5
+UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+UIStroke.Parent = GlowFrame
+
+-- Заголовок меню
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 45)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.Text = "PURPLE TRIGGER v2.0"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 16
+Title.Parent = GlowFrame
+
+-- Градиент для красивого текста
+local UIGradient = Instance.new("UIGradient")
+UIGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(194, 147, 240))
+}
+UIGradient.Parent = Title
+
+-- Подзаголовок (Линия разделения)
+local Line = Instance.new("Frame")
+Line.Size = UDim2.new(0.9, 0, 0, 1)
+Line.Position = UDim2.new(0.05, 0, 0, 45)
+Line.BackgroundColor3 = Color3.fromRGB(40, 35, 55)
+Line.BorderSizePixel = 0
+Line.Parent = GlowFrame
+
+-- Контейнер для элементов
+local Container = Instance.new("Frame")
+Container.Size = UDim2.new(0.9, 0, 0, 210)
+Container.Position = UDim2.new(0.05, 0, 0, 55)
+Container.BackgroundTransparency = 1
+Container.Parent = GlowFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, 12)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Parent = Container
+
+-- 1. ЭЛЕМЕНТ: ТУМБЛЕР (Toggle TriggerBot)
+local ToggleFrame = Instance.new("Frame")
+ToggleFrame.Size = UDim2.new(1, 0, 0, 40)
+ToggleFrame.BackgroundColor3 = Color3.fromRGB(26, 23, 36)
+ToggleFrame.Parent = Container
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 8)
+ToggleCorner.Parent = ToggleFrame
+
+local ToggleText = Instance.new("TextLabel")
+ToggleText.Size = UDim2.new(0.7, 0, 1, 0)
+ToggleText.Position = UDim2.new(0.04, 0, 0, 0)
+ToggleText.BackgroundTransparency = 1
+ToggleText.Font = Enum.Font.GothamSemibold
+ToggleText.Text = "Включить Триггербот"
+ToggleText.TextColor3 = Color3.fromRGB(200, 200, 200)
+ToggleText.TextSize = 14
+ToggleText.TextXAlignment = Enum.TextXAlignment.Left
+ToggleText.Parent = ToggleFrame
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0, 45, 0, 22)
+ToggleBtn.Position = UDim2.new(0.96, -45, 0.5, -11)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(45, 40, 60)
+ToggleBtn.Text = ""
+ToggleBtn.Parent = ToggleFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(1, 0)
+BtnCorner.Parent = ToggleBtn
+
+local ToggleCircle = Instance.new("Frame")
+ToggleCircle.Size = UDim2.new(0, 16, 0, 16)
+ToggleCircle.Position = UDim2.new(0, 3, 0.5, -8)
+ToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ToggleCircle.Parent = ToggleBtn
+
+local CircleCorner = Instance.new("UICorner")
+CircleCorner.CornerRadius = UDim.new(1, 0)
+CircleCorner.Parent = ToggleCircle
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    Settings.TriggerBot = not Settings.TriggerBot
+    local targetPos = Settings.TriggerBot and UDim2.new(0, 26, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+    local targetColor = Settings.TriggerBot and Color3.fromRGB(157, 78, 221) or Color3.fromRGB(45, 40, 60)
+    
+    TweenService:Create(ToggleCircle, TweenInfo.new(0.2), {Position = targetPos}):Play()
+    TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
+end)
+
+-- 2. ЭЛЕМЕНТ: ДРОПДАУН (Выбор режима)
+local DropdownFrame = Instance.new("Frame")
+DropdownFrame.Size = UDim2.new(1, 0, 0, 40)
+DropdownFrame.BackgroundColor3 = Color3.fromRGB(26, 23, 36)
+DropdownFrame.Parent = Container
+
+local DropdownCorner = Instance.new("UICorner")
+DropdownCorner.CornerRadius = UDim.new(0, 8)
+DropdownCorner.Parent = DropdownFrame
+
+local DropdownText = Instance.new("TextLabel")
+DropdownText.Size = UDim2.new(0.5, 0, 1, 0)
+DropdownText.Position = UDim2.new(0.04, 0, 0, 0)
+DropdownText.BackgroundTransparency = 1
+DropdownText.Font = Enum.Font.GothamSemibold
+DropdownText.Text = "Режим работы"
+DropdownText.TextColor3 = Color3.fromRGB(200, 200, 200)
+DropdownText.TextSize = 14
+DropdownText.TextXAlignment = Enum.TextXAlignment.Left
+DropdownText.Parent = DropdownFrame
+
+local DropdownBtn = Instance.new("TextButton")
+DropdownBtn.Size = UDim2.new(0, 130, 0, 26)
+DropdownBtn.Position = UDim2.new(0.96, -130, 0.5, -13)
+DropdownBtn.BackgroundColor3 = Color3.fromRGB(36, 32, 50)
+DropdownBtn.Font = Enum.Font.Gotham
+DropdownBtn.Text = Settings.Mode
+DropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DropdownBtn.TextSize = 12
+DropdownBtn.Parent = DropdownFrame
+
+local DropCorner = Instance.new("UICorner")
+DropCorner.CornerRadius = UDim.new(0, 6)
+DropCorner.Parent = DropdownBtn
+
+local ModeList = {"Идеальный", "Умный", "Точный", "Комбинированный"}
+local currentModeIndex = 4
+
+DropdownBtn.MouseButton1Click:Connect(function()
+    currentModeIndex = currentModeIndex % #ModeList + 1
+    Settings.Mode = ModeList[currentModeIndex]
+    DropdownBtn.Text = Settings.Mode
+    
+    -- Вспышка фиолетовым при смене режима
+    DropdownBtn.BackgroundColor3 = Color3.fromRGB(157, 78, 221)
+    TweenService:Create(DropdownBtn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(36, 32, 50)}):Play()
+end)
+
+-- 3. ЭЛЕМЕНТ: ПОЛЗУНОК (Slider Точности)
+local SliderFrame = Instance.new("Frame")
+SliderFrame.Size = UDim2.new(1, 0, 0, 55)
+SliderFrame.BackgroundColor3 = Color3.fromRGB(26, 23, 36)
+SliderFrame.Parent = Container
+
+local SliderCorner = Instance.new("UICorner")
+SliderCorner.CornerRadius = UDim.new(0, 8)
+SliderCorner.Parent = SliderFrame
+
+local SliderText = Instance.new("TextLabel")
+SliderText.Size = UDim2.new(0.7, 0, 0, 25)
+SliderText.Position = UDim2.new(0.04, 0, 0, 2)
+SliderText.BackgroundTransparency = 1
+SliderText.Font = Enum.Font.GothamSemibold
+SliderText.Text = "Радиус точности (FOV)"
+SliderText.TextColor3 = Color3.fromRGB(200, 200, 200)
+SliderText.TextSize = 13
+SliderText.TextXAlignment = Enum.TextXAlignment.Left
+SliderText.Parent = SliderFrame
+
+local SliderValueText = Instance.new("TextLabel")
+SliderValueText.Size = UDim2.new(0.2, 0, 0, 25)
+SliderValueText.Position = UDim2.new(0.76, 0, 0, 2)
+SliderValueText.BackgroundTransparency = 1
+SliderValueText.Font = Enum.Font.GothamBold
+SliderValueText.Text = tostring(Settings.TriggerPrecision) .. "px"
+SliderValueText.TextColor3 = Color3.fromRGB(157, 78, 221)
+SliderValueText.TextSize = 13
+SliderValueText.TextXAlignment = Enum.TextXAlignment.Right
+SliderValueText.Parent = SliderFrame
+
+local SliderTrack = Instance.new("TextButton")
+SliderTrack.Size = UDim2.new(0.92, 0, 0, 6)
+SliderTrack.Position = UDim2.new(0.04, 0, 0, 36)
+SliderTrack.BackgroundColor3 = Color3.fromRGB(45, 40, 60)
+SliderTrack.Text = ""
+SliderTrack.AutoButtonColor = false
+SliderTrack.Parent = SliderFrame
+
+local TrackCorner = Instance.new("UICorner")
+TrackCorner.CornerRadius = UDim.new(1, 0)
+TrackCorner.Parent = SliderTrack
+
+local SliderFill = Instance.new("Frame")
+SliderFill.Size = UDim2.new(0.3, 0, 1, 0) -- Начнем с 30% (примерно 15 пикселей от 50 макс)
+SliderFill.BackgroundColor3 = Color3.fromRGB(157, 78, 221)
+SliderFill.BorderSizePixel = 0
+SliderFill.Parent = SliderTrack
+
+local FillCorner = Instance.new("UICorner")
+FillCorner.CornerRadius = UDim.new(1, 0)
+FillCorner.Parent = SliderFill
+
+-- Логика перетаскивания ползунка
+local isSliding = false
+local function UpdateSlider()
+    local mousePos = UserInputService:GetMouseLocation().X
+    local trackPos = SliderTrack.AbsolutePosition.X
+    local trackWidth = SliderTrack.AbsoluteSize.X
+    local percentage = math.clamp((mousePos - trackPos) / trackWidth, 0, 1)
+    
+    SliderFill.Size = UDim2.new(percentage, 0, 1, 0)
+    local calculatedValue = math.round(percentage * 50) -- Максимальный радиус 50 пикселей
+    Settings.TriggerPrecision = calculatedValue
+    SliderValueText.Text = tostring(calculatedValue) .. "px"
+end
+
+SliderTrack.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isSliding = true
+        UpdateSlider()
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isSliding = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if isSliding and input.UserInputType == Enum.UserInputType.MouseMovement then
+        UpdateSlider()
+    end
+end)
+
+-- Инструкция закрытия меню
+local InfoText = Instance.new("TextLabel")
+InfoText.Size = UDim2.new(1, 0, 0, 20)
+InfoText.Position = UDim2.new(0, 0, 1, -25)
+InfoText.BackgroundTransparency = 1
+InfoText.Font = Enum.Font.GothamItalic
+InfoText.Text = "Меню можно свободно перетаскивать"
+InfoText.TextColor3 = Color3.fromRGB(90, 80, 110)
+InfoText.TextSize = 11
+InfoText.Parent = GlowFrame
