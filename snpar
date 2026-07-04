@@ -25,7 +25,7 @@ local Settings = {
     -- TRIGGER
     TriggerBot = true,
     TriggerDelay = 0.001,
-    TriggerPrecision = 20,
+    TriggerPrecision = 25,
     
     -- VISUALS
     ESP_Box = true,
@@ -56,6 +56,7 @@ local isDragging = false
 local dragStart = nil
 local dragOffset = nil
 local lastShootTime = 0
+local shootCooldown = 0.05
 
 -- ===== ПРОВЕРКА АДМИНОВ =====
 local function CheckAdmins()
@@ -120,6 +121,7 @@ local function IsPlayerVisible(character)
     return false
 end
 
+-- ===== ИСПРАВЛЕННЫЙ ТРИГГЕРБОТ (МГНОВЕННЫЙ) =====
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     
@@ -134,6 +136,7 @@ local function IsAimingAtHead(target)
     local mousePos = UserInputService:GetMouseLocation()
     local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
     
+    -- Увеличиваем точность для более быстрого выстрела
     if dist > Settings.TriggerPrecision then
         return false
     end
@@ -159,6 +162,7 @@ local function GetTriggerTarget()
                 if player.Team == LocalPlayer.Team then continue end
             end
             
+            -- Проверка видимости для триггера
             if not IsPlayerVisible(character) then
                 continue
             end
@@ -284,17 +288,50 @@ local function InstantAim(target)
     end
 end
 
-local function SuperFastShoot()
+-- ===== ИСПРАВЛЕННЫЙ МГНОВЕННЫЙ ВЫСТРЕЛ =====
+local function InstantShoot()
     if not canShoot then return end
+    
+    -- Проверка на спам
+    local currentTime = tick()
+    if currentTime - lastShootTime < shootCooldown then
+        return
+    end
+    lastShootTime = currentTime
+    
     canShoot = false
     
-    task.spawn(function()
-        pcall(function()
-            mouse1click()
-        end)
-        task.wait(Settings.TriggerDelay)
-        canShoot = true
+    -- Мгновенный выстрел через pcall
+    pcall(function()
+        mouse1click()
     end)
+    
+    -- Минимальная задержка
+    task.wait(Settings.TriggerDelay)
+    canShoot = true
+end
+
+-- ===== АЛЬТЕРНАТИВНЫЙ ВЫСТРЕЛ (ЧЕРЕЗ MOUSE1DOWN/MOUSE1UP) =====
+local function AlternativeShoot()
+    if not canShoot then return end
+    
+    local currentTime = tick()
+    if currentTime - lastShootTime < shootCooldown then
+        return
+    end
+    lastShootTime = currentTime
+    
+    canShoot = false
+    
+    pcall(function()
+        -- Имитация нажатия и отпускания
+        mouse1down()
+        task.wait(0.01)
+        mouse1up()
+    end)
+    
+    task.wait(Settings.TriggerDelay)
+    canShoot = true
 end
 
 local function ApplyWeaponMods()
@@ -322,7 +359,7 @@ local function ApplyWeaponMods()
     end)
 end
 
--- ===== ESP SKELETON =====
+-- ===== ESP =====
 local function DrawSkeleton(character)
     if not character then return end
     
@@ -833,13 +870,15 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
+    -- ===== ИСПРАВЛЕННЫЙ ТРИГГЕРБОТ (МГНОВЕННЫЙ) =====
     if Settings.TriggerBot and canShoot then
         local target = GetTriggerTarget()
         if target then
             if IsAimingAtHead(target) then
                 local humanoid = target.Character:FindFirstChild("Humanoid")
                 if humanoid and humanoid.Health > 0 then
-                    SuperFastShoot()
+                    -- Используем улучшенный выстрел
+                    InstantShoot()
                 end
             end
         end
@@ -868,4 +907,4 @@ end)
 print("=== Sniper Arena Script by wizzey loaded ===")
 print("Right Shift - toggle GUI")
 print("E - hold for aimbot")
-print("Drag title bar to move GUI")
+print("TriggerBot - МГНОВЕННЫЙ (фикс задержек)")
