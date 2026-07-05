@@ -1,9 +1,8 @@
--- Sniper Arena Script by wizzey (INSTANT TRIGGER EDIT 2026)
+-- Sniper Arena Script by wizzey (ZERO LAG TRIGGER 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
@@ -83,11 +82,16 @@ local function GetClosestPlayer()
     return closest
 end
 
--- МОМЕНТАЛЬНЫЙ КЛИК БЕЗ ЗАДЕРЖЕК
+-- МОМЕНТАЛЬНЫЙ ВЫСТРЕЛ ЧЕРЕЗ АКТИВАЦИЮ ИНСТРУМЕНТА
 local function InstantShoot()
-    local x, y = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2
-    VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-    VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+    local character = LocalPlayer.Character
+    if character then
+        -- Ищем оружие, которое сейчас экипировано в персонаже
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool then
+            tool:Activate()
+        end
+    end
 end
 
 table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
@@ -177,7 +181,7 @@ TitleFix.Parent = TitleBar
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 1, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "    WIZZEY_WARE <font color='#ffffff'>// rage edition</font>"
+Title.Text = "    WIZZEY_WARE <font color='#ffffff'>// zero lag</font>"
 Title.RichText = true
 Title.TextColor3 = Color3.fromRGB(200, 200, 205)
 Title.Font = Enum.Font.GothamBold
@@ -535,11 +539,10 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- АГРЕССИВНЫЙ И МГНОВЕННЫЙ ТРИГГЕРБОТ
+    -- БЕЗЛАГОВЫЙ ТРИГГЕРБОТ (ПРЯМАЯ АКТИВАЦИЯ TOOL)
     if Settings.TriggerBot and isActivationKeyPressed then
         local targetFound = false
         
-        -- Метод 1: Проверка Mouse.Target (мгновенный отклик движка)
         local targetObj = Mouse.Target
         if targetObj and targetObj.Parent then
             local hitModel = targetObj.Parent
@@ -551,7 +554,6 @@ RunService.RenderStepped:Connect(function()
             end
         end
         
-        -- Метод 2: Запасной Raycast по центру (если Mouse.Target пролетел сквозь прозрачную голову)
         if not targetFound then
             local mouseRay = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
             local params = RaycastParams.new()
@@ -571,7 +573,6 @@ RunService.RenderStepped:Connect(function()
             end
         end
         
-        -- Если цель подтверждена хотя бы одним методом — стреляем без задержки
         if targetFound then
             InstantShoot()
         end
