@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (ORIGINAL CORE FIXED + PREMIUM VISUALS)
+-- Sniper Arena Script by wizzey (FINAL FIX 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -10,23 +10,23 @@ local LocalPlayer = Players.LocalPlayer
 -- ===== ОРИГИНАЛЬНЫЕ НАСТРОЙКИ =====
 local Settings = {
     Aimbot = true,
-    AimbotFOV = 400,
+    AimbotFOV = 200, -- Снижено дефолтное значение для более точного теста
     AimbotKey = Enum.KeyCode.E,
     AimbotSmooth = 0.3,
     TriggerBot = true,
     TriggerPrecision = 12,
     ESP_Box = true,
+    ShowFOV = true, -- Добавлено явное свойство
 }
 
 -- ===== ОРИГИНАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
 local isKeyPressed = false
 local canShoot = true
 local lastTarget = nil
-local lastHeadPos = nil
 
 -- ===== ОРИГИНАЛЬНЫЙ КРУГ FOV =====
 local FOVCircle = Drawing.new("Circle")
-FOVCircle.Visible = true
+FOVCircle.Visible = Settings.ShowFOV
 FOVCircle.Radius = Settings.AimbotFOV
 FOVCircle.Thickness = 1
 FOVCircle.Color = Color3.fromRGB(255, 255, 255)
@@ -41,7 +41,6 @@ local function IsPlayerVisible(char)
     local dir = (head.Position - origin).Unit * (head.Position - origin).Magnitude
     local params = RaycastParams.new()
     
-    -- Исправлено: заменено на Exclude (современный аналог Blacklist)
     params.FilterType = Enum.RaycastFilterType.Exclude
     params.FilterDescendantsInstances = {LocalPlayer.Character, char, Camera}
     
@@ -61,13 +60,12 @@ end
 -- ===== ИСПРАВЛЕННЫЙ AIMBOT С ДИНАМИЧЕСКИМ FOV =====
 local function GetClosestPlayer()
     local closest = nil
-    local closestDist = Settings.AimbotFOV -- Исправлено: теперь берет актуальное значение слайдера
+    local closestDist = Settings.AimbotFOV
     local mousePos = UserInputService:GetMouseLocation()
     
-    -- Сначала проверяем залоченную цель
     if lastTarget and lastTarget.Character and lastTarget.Character:FindFirstChild("Head") then
         local headPos = GetHeadPosition(lastTarget.Character)
-        if headPos then
+        if headPos and IsPlayerVisible(lastTarget.Character) then
             local pos, onScreen = Camera:WorldToViewportPoint(headPos)
             if onScreen and pos.Z > 0 then
                 local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
@@ -81,15 +79,16 @@ local function GetClosestPlayer()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local char = player.Character
-            local headPos = GetHeadPosition(char)
-            
-            if headPos then
-                local pos, onScreen = Camera:WorldToViewportPoint(headPos)
-                if onScreen and pos.Z > 0 then
-                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        closest = player
+            if IsPlayerVisible(char) then
+                local headPos = GetHeadPosition(char)
+                if headPos then
+                    local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+                    if onScreen and pos.Z > 0 then
+                        local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                        if dist < closestDist then
+                            closestDist = dist
+                            closest = player
+                        end
                     end
                 end
             end
@@ -140,7 +139,8 @@ local function Shoot()
 end
 
 -- ===== ХЕНДЛЕРЫ КЛАВИШ АИМА =====
-UserInputService.InputBegan:Connect(function(input)
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
     if input.KeyCode == Settings.AimbotKey then
         isKeyPressed = true
     end
@@ -150,7 +150,6 @@ UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
         isKeyPressed = false
         lastTarget = nil
-        lastHeadPos = nil
     end
 end)
 
@@ -442,9 +441,9 @@ for i, tabData in ipairs(Tabs) do
     end)
 end
 
--- ===== НАПОЛНЕНИЕ МЕНЮ ИЗ НАСТРОЕК =====
+-- ===== НАПОЛНЕНИЕ МЕНЮ =====
 CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
-CreateToggle(Pages["Аим"], "Показывать Круг FOV", true, function(v) FOVCircle.Visible = v end)
+CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) -- Исправлено сохранение состояния
 CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v)
     Settings.AimbotFOV = v
     FOVCircle.Radius = v
@@ -453,19 +452,20 @@ end)
 CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
 CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
 
--- ===== ОТКРЫТИЕ / ЗАКРЫТИЕ НА RSHIFT (БЕЗ БАГА С FOV) =====
+-- ===== ОТКРЫТИЕ / ЗАКРЫТИЕ НА RSHIFT =====
 UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
         MainFrame.Visible = not MainFrame.Visible
     end
 end)
 
--- ===== ОРИГИНАЛЬНЫЙ ЦИКЛ RENDERSTEPPED =====
+-- ===== ГЛАВНЫЙ СИНХРОННЫЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
-    -- Исправлено: Позиция круга жестко держится по центру экрана, как в оригинале
+    -- Исправлено: Круг FOV теперь жестко привязан к настройке ShowFOV и Аимботу, вне зависимости от закрытия менюхи
+    FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     
-    -- ОРИГИНАЛЬНЫЙ БЛОК ESP HIGHLIGHT
+    -- ESP HIGHLIGHT
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local char = player.Character
@@ -487,7 +487,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ОРИГИНАЛЬНЫЙ БЛОК TRIGGERBOT
+    -- TRIGGERBOT
     if Settings.TriggerBot and isKeyPressed and canShoot then
         local target = GetClosestPlayer()
         if target and IsPerfectAim(target) then
@@ -495,33 +495,29 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ОРИГИНАЛЬНЫЙ БЛОК AIMBOT (МАКСИМАЛЬНЫЙ ЛОК)
+    -- ИСПРАВЛЕННЫЙ AIMBOT (БЕЗ ВЫКИДЫВАНИЯ КАМЕРЫ И ТРЯСКИ)
     if Settings.Aimbot and isKeyPressed then
         local target = GetClosestPlayer()
         if target then
             local headPos = GetHeadPosition(target.Character)
             if headPos then
-                lastHeadPos = headPos
-                
-                local screenPos = Camera:WorldToViewportPoint(headPos)
-                local mousePos = UserInputService:GetMouseLocation()
-                
-                local deltaX = screenPos.X - mousePos.X
-                local deltaY = screenPos.Y - mousePos.Y
-                
-                if math.abs(deltaX) > 0.1 or math.abs(deltaY) > 0.1 then
-                    pcall(function()
-                        local smooth = Settings.AimbotSmooth
-                        if smooth < 0.5 then
-                            mousemoverel(deltaX, deltaY)
-                        else
-                            mousemoverel(deltaX / smooth, deltaY / smooth)
-                        end
+                local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
+                if onScreen then
+                    local mousePos = UserInputService:GetMouseLocation()
+                    
+                    -- Вычисляем чистое относительное смещение
+                    local deltaX = (screenPos.X - mousePos.X)
+                    local deltaY = (screenPos.Y - mousePos.Y)
+                    
+                    if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
+                        pcall(function()
+                            -- Исправлено: Убрали деление абсолютных координат. Плавная доводка по дельте.
+                            local smooth = math.clamp(Settings.AimbotSmooth, 0.05, 1)
+                            mousemoverel(deltaX * smooth, deltaY * smooth)
+                         pcall(function()
                     end)
                 end
             end
-        else
-            lastHeadPos = nil
         end
     end
 end)
