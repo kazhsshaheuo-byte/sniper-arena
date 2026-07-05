@@ -455,7 +455,7 @@ CreateToggle(Pages["Триггер"], "Включить Триггербот", S
 UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
         MainFrame.Visible = not MainFrame.Visible
-        FOVCircle.Visible = MainFrame.Visible
+        -- Убрали принудительное скрытие FOVCircle, теперь круг не пропадает!
     end
 end)
 
