@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (ZERO LAG TRIGGER FIXED)
+-- Sniper Arena Script by wizzey (SMOOTH AIM FIX)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -23,6 +23,7 @@ local Settings = {
     Aimbot = true,
     AimbotFOV = 250, 
     AimbotKey = Enum.KeyCode.E, 
+    AimbotSmooth = 5, -- ПЛАВНОСТЬ (чем больше, тем плавнее)
     TriggerBot = true,
     ESP_Box = true,
     ShowFOV = true,
@@ -83,25 +84,13 @@ local function GetClosestPlayer()
     return closest
 end
 
--- ===== МГНОВЕННЫЙ ВЫСТРЕЛ (ЧЕРЕЗ MOUSE1CLICK) =====
+-- ===== МГНОВЕННЫЙ ВЫСТРЕЛ =====
 local function InstantShoot()
     if triggerCooldown then return end
     triggerCooldown = true
     
     pcall(function()
-        -- Способ 1: mouse1click (самый надежный)
         mouse1click()
-    end)
-    
-    -- Способ 2: через Tool (если mouse1click не сработал)
-    pcall(function()
-        local character = LocalPlayer.Character
-        if character then
-            local tool = character:FindFirstChildOfClass("Tool")
-            if tool then
-                tool:Activate()
-            end
-        end
     end)
     
     task.wait(0.015)
@@ -468,6 +457,7 @@ end
 
 CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
 CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) 
+CreateSlider(Pages["Аим"], "Плавность Аима", 1, 15, Settings.AimbotSmooth, function(v) Settings.AimbotSmooth = v end)
 CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v) Settings.AimbotFOV = v; FOVCircle.Radius = v end)
 
 CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
@@ -553,7 +543,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== МГНОВЕННЫЙ ТРИГГЕРБОТ (БЕЗ ЗАДЕРЖЕК) =====
+    -- ===== ТРИГГЕРБОТ =====
     if Settings.TriggerBot and isActivationKeyPressed and not triggerCooldown then
         local target = GetClosestPlayer()
         
@@ -566,7 +556,6 @@ RunService.RenderStepped:Connect(function()
                 local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
                 
                 if dist < Settings.AimbotFOV then
-                    -- МГНОВЕННЫЙ ВЫСТРЕЛ
                     triggerCooldown = true
                     pcall(function()
                         mouse1click()
@@ -578,12 +567,20 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== АИМБОТ =====
+    -- ===== ПЛАВНЫЙ АИМБОТ (БЕЗ ДЕРГАНЬЯ) =====
     if Settings.Aimbot and isActivationKeyPressed then
         local target = GetClosestPlayer()
         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
             local exactHeadPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, exactHeadPos)
+            local targetCF = CFrame.new(Camera.CFrame.Position, exactHeadPos)
+            
+            -- ПЛАВНОЕ НАВЕДЕНИЕ
+            local smooth = Settings.AimbotSmooth
+            if smooth <= 1 then
+                Camera.CFrame = targetCF
+            else
+                Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / smooth)
+            end
         end
     end
 end)
