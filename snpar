@@ -1,8 +1,9 @@
--- Sniper Arena Script by wizzey (PREMIUM NEON & MATHEMATICAL TRIGGER 2026)
+-- Sniper Arena Script by wizzey (ULTIMATE TRIGGER FORCED UPDATE 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager") -- Фикс клика
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -28,13 +29,14 @@ local Settings = {
 }
 
 local isKeyPressed = false
+local lastShot = 0
 
 -- ===== КРУГ FOV =====
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = Settings.ShowFOV
 FOVCircle.Radius = Settings.AimbotFOV
 FOVCircle.Thickness = 1.5
-FOVCircle.Color = Color3.fromRGB(0, 255, 204) -- Свежий бирюзовый неон
+FOVCircle.Color = Color3.fromRGB(0, 255, 204)
 FOVCircle.Filled = false
 FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
@@ -80,14 +82,26 @@ local function GetClosestPlayer()
     return closest
 end
 
--- МОМЕНТАЛЬНЫЙ ВЫСТРЕЛ
-local function InstantShoot()
-    if mouse1click then 
-        pcall(mouse1click) 
-    elseif mouse1press and mouse1release then
-        pcall(mouse1press)
-        pcall(mouse1release)
-    end
+-- НОВЫЙ СИМУЛЯТОР ФИЗИЧЕСКОГО КЛИКА (ФИКС СТРЕЛЬБЫ)
+local function ForceShoot()
+    if tick() - lastShot < 0.1 then return end -- Ограничение скорострельности, чтобы не крашило оружие
+    lastShot = tick()
+    
+    task.spawn(function()
+        if mouse1click then 
+            pcall(mouse1click)
+        elseif mouse1press and mouse1release then
+            pcall(mouse1press)
+            task.wait(0.02)
+            pcall(mouse1release)
+        else
+            -- Жесткий обход через менеджер виртуального ввода Roblox
+            local x, y = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
+            task.wait(0.02)
+            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
+        end
+    end)
 end
 
 UserInputService.InputBegan:Connect(function(input, gpe)
@@ -119,7 +133,6 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 16)
 MainCorner.Parent = MainFrame
 
--- Неоновая окантовка (Glow Effect)
 local MainStroke = Instance.new("UIStroke")
 MainStroke.Thickness = 1.5
 MainStroke.Color = Color3.fromRGB(0, 255, 204)
@@ -373,7 +386,6 @@ for i, tabData in ipairs(Tabs) do
     TBtn.MouseButton1Click:Connect(function() SwitchTab(tabData.Name, TBtn) end)
 end
 
--- Распределяем элементы по вкладкам
 CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
 CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) 
 CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v) Settings.AimbotFOV = v; FOVCircle.Radius = v end)
@@ -382,12 +394,11 @@ CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Bo
 CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
 CreateSlider(Pages["Misc"], "Head Expander Size", 1, 15, Settings.HeadSize, function(v) Settings.HeadSize = v end)
 
--- Скрыть/показать GUI на Right Shift
 UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then MainFrame.Visible = not MainFrame.Visible end
 end)
 
--- ===== ИДЕАЛЬНЫЙ ЦИКЛ ОБРАБОТКИ (RenderStepped) =====
+-- ===== ОБНОВЛЕННЫЙ ЦИКЛ ОБРАБОТКИ =====
 RunService.RenderStepped:Connect(function()
     FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
@@ -398,7 +409,6 @@ RunService.RenderStepped:Connect(function()
             local head = char:FindFirstChild("Head")
             
             if head and head:IsA("BasePart") then
-                -- Стабильный Force-апдейт хитбоксов
                 if Settings.HeadSize > 1 then
                     head.Size = Vector3.new(Settings.HeadSize, Settings.HeadSize, Settings.HeadSize)
                     head.Transparency = 0.7 
@@ -409,7 +419,6 @@ RunService.RenderStepped:Connect(function()
                     head.Transparency = 0
                 end
                 
-                -- Рендер ESP (Неоновый стиль)
                 if Settings.ESP_Box then
                     local highlight = char:FindFirstChild("PoloESP")
                     if not highlight then
@@ -429,17 +438,20 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- МАТЕМАТИЧЕСКИЙ ВЫСОКОТОЧНЫЙ ТРИГГЕРБОТ
+    -- АБСОЛЮТНО ФИКСИРОВАННЫЙ ТРИГГЕРБОТ
     if Settings.TriggerBot then
-        local ray = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        -- Берём луч из реальной математической точки прицела экрана (с учётом инсета)
+        local mouseRay = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
         
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 local char = player.Character
+                
+                -- Координата центра НАСТОЯЩЕЙ головы
                 local realHeadCenter = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
                 
-                local rayOrigin = ray.Origin
-                local rayDirection = ray.Direction.Unit
+                local rayOrigin = mouseRay.Origin
+                local rayDirection = mouseRay.Direction.Unit
                 local playerVector = realHeadCenter - rayOrigin
                 local dotProduct = playerVector:Dot(rayDirection)
                 
@@ -447,9 +459,10 @@ RunService.RenderStepped:Connect(function()
                     local closestPointOnRay = rayOrigin + (rayDirection * dotProduct)
                     local distanceToTrueHead = (realHeadCenter - closestPointOnRay).Magnitude
                     
-                    if distanceToTrueHead <= 1.4 then -- Захват строго оригинальных 1.4 студа реальной головы
+                    -- Если прицел наведён прямо в границы оригинальной головы (1.5 студа)
+                    if distanceToTrueHead <= 1.5 then
                         if IsPlayerVisible(char) then
-                            InstantShoot()
+                            ForceShoot()
                             break
                         end
                     end
@@ -458,13 +471,11 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- БЕЗУПРЕЧНЫЙ ФИКСИРОВАННЫЙ АИМБОТ
+    -- ФИКСИРОВАННЫЙ АИМБОТ
     if isKeyPressed and Settings.Aimbot then
         local target = GetClosestPlayer()
         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
             local exactHeadPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
-            
-            -- Мертвая хватка камеры на реальном центре без конфликтов с мышью
             Camera.CFrame = CFrame.new(Camera.CFrame.Position, exactHeadPos)
         end
     end
