@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (PERFECT AIM - НИКАКОГО ОТСТАВАНИЯ)
+-- Sniper Arena Script by wizzey (PERFECT LOCK-ON + INSTANT PERFECT TRIGGER)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,18 +11,13 @@ local Settings = {
     Aimbot = true,
     AimbotFOV = 300,
     AimbotKey = Enum.KeyCode.E,
-    AimbotSmooth = 1.2, -- ОЧЕНЬ БЫСТРО, НО ПЛАВНО
-    AimbotWallCheck = true,
-    
     TriggerBot = true,
-    TriggerPrecision = 15,
-    TriggerDelay = 0.05,
-    
+    TriggerPrecision = 8, -- МАКСИМАЛЬНАЯ ТОЧНОСТЬ
     ESP_Box = true,
 }
 
 -- ===== ПЕРЕМЕННЫЕ =====
-local isAimbotKeyPressed = false
+local isKeyPressed = false
 local Drawings = {}
 local canShoot = true
 local currentTarget = nil
@@ -47,13 +42,12 @@ local function GetHeadPosition(char)
     return head and head.Position or nil
 end
 
--- ===== AIMBOT (ИДЕАЛЬНЫЙ - БЕЗ ОТСТАВАНИЯ) =====
+-- ===== AIMBOT =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = Settings.AimbotFOV
     local mousePos = UserInputService:GetMouseLocation()
     
-    -- Сначала проверяем прошлую цель
     if lastTarget and lastTarget.Character and lastTarget.Character:FindFirstChild("Head") then
         local headPos = GetHeadPosition(lastTarget.Character)
         if headPos then
@@ -61,13 +55,7 @@ local function GetClosestPlayer()
             if onScreen and pos.Z > 0 then
                 local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                 if dist < Settings.AimbotFOV then
-                    if Settings.AimbotWallCheck then
-                        if IsPlayerVisible(lastTarget.Character) then
-                            return lastTarget
-                        end
-                    else
-                        return lastTarget
-                    end
+                    return lastTarget
                 end
             end
         end
@@ -76,12 +64,8 @@ local function GetClosestPlayer()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local char = player.Character
-            
-            if Settings.AimbotWallCheck and not IsPlayerVisible(char) then
-                continue
-            end
-            
             local headPos = GetHeadPosition(char)
+            
             if headPos then
                 local pos, onScreen = Camera:WorldToViewportPoint(headPos)
                 if onScreen and pos.Z > 0 then
@@ -102,12 +86,13 @@ local function GetClosestPlayer()
     return closest
 end
 
--- ===== TRIGGERBOT =====
-local function IsAimingAtHead(target)
+-- ===== ИДЕАЛЬНЫЙ ТРИГГЕР (СТРЕЛЯЕТ ТОЛЬКО ПРИ 100% ПОПАДАНИИ) =====
+local function IsPerfectAim(target)
     if not target or not target.Character then return false end
     local head = target.Character:FindFirstChild("Head")
     if not head then return false end
     
+    -- Проверка видимости
     if not IsPlayerVisible(target.Character) then
         return false
     end
@@ -118,27 +103,57 @@ local function IsAimingAtHead(target)
     local mousePos = UserInputService:GetMouseLocation()
     local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
     
-    return dist < Settings.TriggerPrecision
+    -- СТРОГАЯ ПРОВЕРКА - только при точном попадании
+    if dist > Settings.TriggerPrecision then
+        return false
+    end
+    
+    -- Проверка что голова в центре экрана
+    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    local centerDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+    
+    -- Голова должна быть в центре экрана (не более 50 пикселей от центра)
+    if centerDist > 50 then
+        return false
+    end
+    
+    -- Проверка угла между прицелом и головой
+    local camPos = Camera.CFrame.Position
+    local camDir = Camera.CFrame.LookVector
+    local dirToHead = (head.Position - camPos).Unit
+    local angle = math.deg(math.acos(math.clamp(camDir:Dot(dirToHead), -1, 1)))
+    
+    -- Угол должен быть минимальным (почти идеальное наведение)
+    if angle > 0.5 then
+        return false
+    end
+    
+    return true
 end
 
 local function Shoot()
     if not canShoot then return end
     canShoot = false
-    pcall(function() mouse1click() end)
-    task.wait(Settings.TriggerDelay)
-    canShoot = true
+    
+    task.spawn(function()
+        pcall(function()
+            mouse1click()
+        end)
+        task.wait(0.01)
+        canShoot = true
+    end)
 end
 
 -- ===== КЛАВИШИ =====
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
-        isAimbotKeyPressed = true
+        isKeyPressed = true
     end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
-        isAimbotKeyPressed = false
+        isKeyPressed = false
         lastTarget = nil
     end
 end)
@@ -160,7 +175,7 @@ RunService.RenderStepped:Connect(function()
     fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     table.insert(Drawings, fovCircle)
     
-    -- ESP (через стены)
+    -- ESP
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local char = player.Character
@@ -183,16 +198,16 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- TRIGGERBOT
-    if Settings.TriggerBot and canShoot then
+    -- ===== TRIGGERBOT (ТОЛЬКО ПРИ ИДЕАЛЬНОМ НАВЕДЕНИИ) =====
+    if Settings.TriggerBot and isKeyPressed and canShoot then
         local target = GetClosestPlayer()
-        if target and IsAimingAtHead(target) then
+        if target and IsPerfectAim(target) then
             Shoot()
         end
     end
     
-    -- ===== ИДЕАЛЬНЫЙ AIMBOT (БЕЗ ОТСТАВАНИЯ) =====
-    if Settings.Aimbot and isAimbotKeyPressed then
+    -- ===== AIMBOT (МГНОВЕННЫЙ ЛОК) =====
+    if Settings.Aimbot and isKeyPressed then
         local target = GetClosestPlayer()
         if target then
             local headPos = GetHeadPosition(target.Character)
@@ -203,11 +218,9 @@ RunService.RenderStepped:Connect(function()
                 local deltaX = screenPos.X - mousePos.X
                 local deltaY = screenPos.Y - mousePos.Y
                 
-                -- БЕЗ ОТСТАВАНИЯ - корректировка каждые 0.5 пикселя
                 if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
                     pcall(function()
-                        -- Очень быстрое наведение с минимальным сглаживанием
-                        mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
+                        mousemoverel(deltaX, deltaY)
                     end)
                 end
             end
@@ -218,10 +231,11 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Sniper Arena",
-        Text = "E - PERFECT AIM (no lag) | WallCheck ON",
+        Text = "Hold E - PERFECT LOCK + INSTANT TRIGGER",
         Duration = 3
     })
 end)
 
 print("=== Sniper Arena Script by wizzey loaded ===")
-print("E - PERFECT AIMBOT (НЕ ОТСТАЕТ)")
+print("Hold E - PERFECT LOCK ON HEAD")
+print("Trigger: ONLY on 100% perfect aim")
