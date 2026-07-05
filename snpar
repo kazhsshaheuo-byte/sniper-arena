@@ -1,1 +1,222 @@
-local function a()local b=game:GetService("Players")local c=game:GetService("RunService")local d=game:GetService("UserInputService")local e=workspace.CurrentCamera local f=b.LocalPlayer local g=f:GetMouse()local h={aim=true,fov=300,key=Enum.KeyCode.E,smooth=1,wall=true,trig=true,prec=15,del=0.05,esp=true}local i=false local j={}local k=true d.InputBegan:Connect(function(l)if l.KeyCode==h.key then i=true end end)d.InputEnded:Connect(function(m)if m.KeyCode==h.key then i=false end end)local function n(o)local p=o:FindFirstChild("Head")return p and p.Position or nil end local function q(r)if not r or not r:FindFirstChild("Head")then return false end local s=r.Head local t=e.CFrame.Position local u=(s.Position-t).Unit*(s.Position-t).Magnitude local v=RaycastParams.new()v.FilterType=Enum.RaycastFilterType.Blacklist v.FilterDescendantsInstances={f.Character,r}local w=workspace:Raycast(t,u,v)if not w then return true end return w.Instance and w.Instance:IsDescendantOf(r)end local function x()local y=nil local z=h.fov local A=d:GetMouseLocation()for _,B in pairs(b:GetPlayers())do if B~=f and B.Character and B.Character:FindFirstChild("Head")then local C=B.Character if h.wall and not q(C)then continue end local D=n(C)if D then local E,F=e:WorldToViewportPoint(D)if F and E.Z>0 then local G=(Vector2.new(E.X,E.Y)-A).Magnitude if G<z then z=G y=B end end end end end return y end local function H(I)if not I or not I.Character then return false end local J=I.Character:FindFirstChild("Head")if not J then return false end if h.wall and not q(I.Character)then return false end local K,L=e:WorldToViewportPoint(J.Position)if not L then return false end local M=d:GetMouseLocation()local N=(Vector2.new(K.X,K.Y)-M).Magnitude return N<h.prec end local function O()if not k then return end k=false pcall(function()mouse1click()end)task.wait(h.del)k=true end c.RenderStepped:Connect(function()for _,P in pairs(j)do pcall(function()P:Remove()end)end j={}local Q=Drawing.new("Circle")Q.Visible=true Q.Radius=h.fov Q.Thickness=1 Q.Color=Color3.fromRGB(255,255,255)Q.Filled=false Q.Position=Vector2.new(e.ViewportSize.X/2,e.ViewportSize.Y/2)table.insert(j,Q)for _,R in pairs(b:GetPlayers())do if R~=f and R.Character and R.Character:FindFirstChild("Head")then local S=R.Character local T=q(S)if h.esp and T then local U=S:FindFirstChild("PoloESP")if not U then U=Instance.new("Highlight")U.Name="PoloESP"U.Parent=S end U.FillColor=Color3.fromRGB(255,0,0)U.OutlineColor=Color3.fromRGB(255,255,255)U.FillTransparency=0.4 U.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop else local V=S:FindFirstChild("PoloESP")if V then V:Destroy()end end end end if h.trig and k then local W=x()if W and H(W)then O()end end if h.aim and i then local X=x()if X then local Y=n(X.Character)if Y then local Z=e:WorldToViewportPoint(Y)local aa=d:GetMouseLocation()local ab=Z.X-aa.X local ac=Z.Y-aa.Y if math.abs(ab)>2 or math.abs(ac)>2 then pcall(function()if h.smooth<=1 then mousemoverel(ab,ac)else mousemoverel(ab/h.smooth,ac/h.smooth)end end)end end end end end)pcall(function()game:GetService("StarterGui"):SetCore("SendNotification",{Title="Sniper Arena",Text="Hold E for aimbot",Duration=3})end)end a()
+-- Sniper Arena Script by wizzey
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+local Settings = {
+    Aimbot = true,
+    AimbotFOV = 300,
+    AimbotKey = Enum.KeyCode.E,
+    AimbotSmooth = 1,
+    AimbotWallCheck = true,
+    TriggerBot = true,
+    TriggerPrecision = 15,
+    TriggerDelay = 0.05,
+    ESP = true
+}
+
+local isKeyPressed = false
+local Drawings = {}
+local canShoot = true
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Settings.AimbotKey then
+        isKeyPressed = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Settings.AimbotKey then
+        isKeyPressed = false
+    end
+end)
+
+local function GetHeadPosition(character)
+    local head = character:FindFirstChild("Head")
+    return head and head.Position or nil
+end
+
+local function IsPlayerVisible(character)
+    if not character or not character:FindFirstChild("Head") then
+        return false
+    end
+    
+    local head = character.Head
+    local origin = Camera.CFrame.Position
+    local direction = (head.Position - origin).Unit * (head.Position - origin).Magnitude
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
+    
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+    
+    if not raycastResult then
+        return true
+    end
+    
+    return raycastResult.Instance and raycastResult.Instance:IsDescendantOf(character)
+end
+
+local function GetClosestPlayer()
+    local closest = nil
+    local closestDist = Settings.AimbotFOV
+    local mousePos = UserInputService:GetMouseLocation()
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local character = player.Character
+            
+            if Settings.AimbotWallCheck and not IsPlayerVisible(character) then
+                continue
+            end
+            
+            local headPos = GetHeadPosition(character)
+            if headPos then
+                local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+                
+                if onScreen and pos.Z > 0 then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    
+                    if dist < closestDist then
+                        closestDist = dist
+                        closest = player
+                    end
+                end
+            end
+        end
+    end
+    
+    return closest
+end
+
+local function IsAimingAtHead(target)
+    if not target or not target.Character then
+        return false
+    end
+    
+    local head = target.Character:FindFirstChild("Head")
+    if not head then
+        return false
+    end
+    
+    if Settings.AimbotWallCheck and not IsPlayerVisible(target.Character) then
+        return false
+    end
+    
+    local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+    if not onScreen then
+        return false
+    end
+    
+    local mousePos = UserInputService:GetMouseLocation()
+    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+    
+    return dist < Settings.TriggerPrecision
+end
+
+local function Shoot()
+    if not canShoot then
+        return
+    end
+    
+    canShoot = false
+    
+    pcall(function()
+        mouse1click()
+    end)
+    
+    task.wait(Settings.TriggerDelay)
+    canShoot = true
+end
+
+RunService.RenderStepped:Connect(function()
+    for _, drawing in pairs(Drawings) do
+        pcall(function()
+            drawing:Remove()
+        end)
+    end
+    Drawings = {}
+    
+    local fovCircle = Drawing.new("Circle")
+    fovCircle.Visible = true
+    fovCircle.Radius = Settings.AimbotFOV
+    fovCircle.Thickness = 1
+    fovCircle.Color = Color3.fromRGB(255, 255, 255)
+    fovCircle.Filled = false
+    fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    table.insert(Drawings, fovCircle)
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local character = player.Character
+            local isVisible = IsPlayerVisible(character)
+            
+            if Settings.ESP and isVisible then
+                local highlight = character:FindFirstChild("PoloESP")
+                
+                if not highlight then
+                    highlight = Instance.new("Highlight")
+                    highlight.Name = "PoloESP"
+                    highlight.Parent = character
+                end
+                
+                highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                highlight.FillTransparency = 0.4
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            else
+                local highlight = character:FindFirstChild("PoloESP")
+                
+                if highlight then
+                    highlight:Destroy()
+                end
+            end
+        end
+    end
+    
+    if Settings.TriggerBot and canShoot then
+        local target = GetClosestPlayer()
+        
+        if target and IsAimingAtHead(target) then
+            Shoot()
+        end
+    end
+    
+    if Settings.Aimbot and isKeyPressed then
+        local target = GetClosestPlayer()
+        
+        if target then
+            local headPos = GetHeadPosition(target.Character)
+            
+            if headPos then
+                local screenPos = Camera:WorldToViewportPoint(headPos)
+                local mousePos = UserInputService:GetMouseLocation()
+                
+                local deltaX = screenPos.X - mousePos.X
+                local deltaY = screenPos.Y - mousePos.Y
+                
+                if math.abs(deltaX) > 2 or math.abs(deltaY) > 2 then
+                    pcall(function()
+                        if Settings.AimbotSmooth <= 1 then
+                            mousemoverel(deltaX, deltaY)
+                        else
+                            mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
+                        end
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+pcall(function()
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Sniper Arena",
+        Text = "Hold E for aimbot",
+        Duration = 3
+    })
+end)
