@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (PERFECT AIM + TRIGGER)
+-- Sniper Arena Script by wizzey (SMOOTH AIM + WALLCHECK)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,7 +11,8 @@ local Settings = {
     Aimbot = true,
     AimbotFOV = 300,
     AimbotKey = Enum.KeyCode.E,
-    AimbotSmooth = 1,
+    AimbotSmooth = 5, -- ПЛАВНОСТЬ (чем больше, тем плавнее)
+    AimbotWallCheck = true, -- ВКЛЮЧАЕМ WALLCHECK ДЛЯ АИМБОТА
     
     TriggerBot = true,
     TriggerPrecision = 15,
@@ -26,7 +27,7 @@ local Drawings = {}
 local canShoot = true
 local currentTarget = nil
 
--- ===== WALL CHECK (ДЛЯ ТРИГГЕРА) =====
+-- ===== WALL CHECK =====
 local function IsPlayerVisible(char)
     if not char or not char:FindFirstChild("Head") then return false end
     local head = char.Head
@@ -45,7 +46,7 @@ local function GetHeadPosition(char)
     return head and head.Position or nil
 end
 
--- ===== AIMBOT (БЕЗ WALLCHECK - ВИДИТ ЧЕРЕЗ СТЕНЫ) =====
+-- ===== AIMBOT (С WALLCHECK И ПЛАВНОСТЬЮ) =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = Settings.AimbotFOV
@@ -54,8 +55,13 @@ local function GetClosestPlayer()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local char = player.Character
-            local headPos = GetHeadPosition(char)
             
+            -- WALLCHECK ДЛЯ АИМБОТА
+            if Settings.AimbotWallCheck and not IsPlayerVisible(char) then
+                continue
+            end
+            
+            local headPos = GetHeadPosition(char)
             if headPos then
                 local pos, onScreen = Camera:WorldToViewportPoint(headPos)
                 if onScreen and pos.Z > 0 then
@@ -77,7 +83,6 @@ local function IsAimingAtHead(target)
     local head = target.Character:FindFirstChild("Head")
     if not head then return false end
     
-    -- WallCheck для триггера
     if not IsPlayerVisible(target.Character) then
         return false
     end
@@ -115,7 +120,6 @@ end)
 
 -- ===== ОСНОВНОЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
-    -- Очистка
     for _, drawing in pairs(Drawings) do
         pcall(function() drawing:Remove() end)
     end
@@ -162,7 +166,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- AIMBOT
+    -- AIMBOT (ПЛАВНЫЙ)
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         if target then
@@ -174,13 +178,10 @@ RunService.RenderStepped:Connect(function()
                 local deltaX = screenPos.X - mousePos.X
                 local deltaY = screenPos.Y - mousePos.Y
                 
-                if math.abs(deltaX) > 2 or math.abs(deltaY) > 2 then
+                if math.abs(deltaX) > 1 or math.abs(deltaY) > 1 then
                     pcall(function()
-                        if Settings.AimbotSmooth <= 1 then
-                            mousemoverel(deltaX, deltaY)
-                        else
-                            mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
-                        end
+                        -- ПЛАВНОЕ НАВЕДЕНИЕ
+                        mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
                     end)
                 end
             end
@@ -191,12 +192,11 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Sniper Arena",
-        Text = "E - Aimbot | ESP through walls | Trigger ONLY visible",
+        Text = "E - Aimbot (Smooth) | WallCheck ON",
         Duration = 3
     })
 end)
 
 print("=== Sniper Arena Script by wizzey loaded ===")
-print("E - hold for aimbot")
-print("TriggerBot: ONLY visible targets")
-print("ESP through walls: ON")
+print("E - hold for aimbot (SMOOTH)")
+print("WallCheck: ON")
