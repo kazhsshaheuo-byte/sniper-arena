@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (ВСЁ РАБОТАЕТ)
+-- Sniper Arena Script by wizzey (Aimbot + TriggerBot + ESP + WallCheck)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,38 +6,51 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
+-- ===== НАСТРОЙКИ =====
 local Settings = {
+    -- AIMBOT
     Aimbot = true,
-    AimbotFOV = 350,
+    AimbotFOV = 300,
     AimbotKey = Enum.KeyCode.E,
     AimbotSmooth = 1,
+    AimbotWallCheck = true,
+    
+    -- TRIGGER
     TriggerBot = true,
-    TriggerPrecision = 20,
+    TriggerPrecision = 15,
     TriggerDelay = 0.05,
-    ESP = true,
+    
+    -- ESP
+    ESP_Box = true,
 }
 
-local isKeyPressed = false
+-- ===== ПЕРЕМЕННЫЕ =====
+local isAimbotKeyPressed = false
 local Drawings = {}
 local canShoot = true
+local currentTarget = nil
 
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Settings.AimbotKey then
-        isKeyPressed = true
-    end
-end)
+-- ===== WALL CHECK (ПРОВЕРКА СТЕН) =====
+local function IsPlayerVisible(char)
+    if not char or not char:FindFirstChild("Head") then return false end
+    local head = char.Head
+    local origin = Camera.CFrame.Position
+    local dir = (head.Position - origin).Unit * (head.Position - origin).Magnitude
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    params.FilterDescendantsInstances = {LocalPlayer.Character, char}
+    local result = workspace:Raycast(origin, dir, params)
+    if not result then return true end
+    return result.Instance and result.Instance:IsDescendantOf(char)
+end
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Settings.AimbotKey then
-        isKeyPressed = false
-    end
-end)
-
-local function GetHeadPosition(character)
-    local head = character:FindFirstChild("Head")
+-- ===== ПОЛУЧЕНИЕ ПОЗИЦИИ ГОЛОВЫ =====
+local function GetHeadPosition(char)
+    local head = char:FindFirstChild("Head")
     return head and head.Position or nil
 end
 
+-- ===== AIMBOT (С WALLCHECK) =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = Settings.AimbotFOV
@@ -45,15 +58,18 @@ local function GetClosestPlayer()
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            local character = player.Character
-            local headPos = GetHeadPosition(character)
+            local char = player.Character
             
+            -- WALL CHECK ДЛЯ АИМБОТА
+            if Settings.AimbotWallCheck and not IsPlayerVisible(char) then
+                continue
+            end
+            
+            local headPos = GetHeadPosition(char)
             if headPos then
                 local pos, onScreen = Camera:WorldToViewportPoint(headPos)
-                
                 if onScreen and pos.Z > 0 then
                     local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                    
                     if dist < closestDist then
                         closestDist = dist
                         closest = player
@@ -62,15 +78,19 @@ local function GetClosestPlayer()
             end
         end
     end
-    
     return closest
 end
 
+-- ===== TRIGGERBOT (С WALLCHECK) =====
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
-    
     local head = target.Character:FindFirstChild("Head")
     if not head then return false end
+    
+    -- WALL CHECK ДЛЯ ТРИГГЕРБОТА
+    if Settings.AimbotWallCheck and not IsPlayerVisible(target.Character) then
+        return false
+    end
     
     local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
     if not onScreen then return false end
@@ -83,17 +103,27 @@ end
 
 local function Shoot()
     if not canShoot then return end
-    
     canShoot = false
-    
-    pcall(function()
-        mouse1click()
-    end)
-    
+    pcall(function() mouse1click() end)
     task.wait(Settings.TriggerDelay)
     canShoot = true
 end
 
+-- ===== КЛАВИШИ =====
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Settings.AimbotKey then
+        isAimbotKeyPressed = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Settings.AimbotKey then
+        isAimbotKeyPressed = false
+        currentTarget = nil
+    end
+end)
+
+-- ===== ОСНОВНОЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
     -- Очистка старых рисунков
     for _, drawing in pairs(Drawings) do
@@ -108,50 +138,47 @@ RunService.RenderStepped:Connect(function()
     fovCircle.Thickness = 1
     fovCircle.Color = Color3.fromRGB(255, 255, 255)
     fovCircle.Filled = false
-    fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     table.insert(Drawings, fovCircle)
     
-    -- ESP через стены
+    -- ===== ESP (РАБОТАЕТ ТОЛЬКО С WALLCHECK) =====
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            local character = player.Character
+            local char = player.Character
+            local visible = IsPlayerVisible(char)
             
-            if Settings.ESP then
-                local highlight = character:FindFirstChild("PoloESP")
-                
+            -- ESP показывается ТОЛЬКО если игрок виден (WallCheck)
+            if visible and Settings.ESP_Box then
+                local highlight = char:FindFirstChild("PoloESP")
                 if not highlight then
                     highlight = Instance.new("Highlight")
                     highlight.Name = "PoloESP"
-                    highlight.Parent = character
+                    highlight.Parent = char
                 end
-                
                 highlight.FillColor = Color3.fromRGB(255, 0, 0)
                 highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                highlight.FillTransparency = 0.3
+                highlight.FillTransparency = 0.4
                 highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             else
-                local highlight = character:FindFirstChild("PoloESP")
-                if highlight then highlight:Destroy() end
+                local h = char:FindFirstChild("PoloESP")
+                if h then h:Destroy() end
             end
         end
     end
     
-    -- TRIGGERBOT
+    -- ===== TRIGGERBOT (СТРЕЛЯЕТ ТОЛЬКО ПО ВИДИМЫМ) =====
     if Settings.TriggerBot and canShoot then
         local target = GetClosestPlayer()
-        
         if target and IsAimingAtHead(target) then
             Shoot()
         end
     end
     
-    -- AIMBOT
-    if Settings.Aimbot and isKeyPressed then
+    -- ===== AIMBOT (НАВОДИТСЯ ТОЛЬКО НА ВИДИМЫХ) =====
+    if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
-        
         if target then
             local headPos = GetHeadPosition(target.Character)
-            
             if headPos then
                 local screenPos = Camera:WorldToViewportPoint(headPos)
                 local mousePos = UserInputService:GetMouseLocation()
@@ -173,10 +200,15 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- ===== УВЕДОМЛЕНИЕ =====
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Sniper Arena",
-        Text = "Hold E for aimbot | ESP through walls",
+        Text = "E - Aimbot | WallCheck ON",
         Duration = 3
     })
 end)
+
+print("=== Sniper Arena Script by wizzey loaded ===")
+print("E - hold for aimbot")
+print("Aimbot + TriggerBot + ESP: ONLY visible targets (WallCheck)")
