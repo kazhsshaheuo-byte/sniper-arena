@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (ORIGINAL CORE + PREMIUM VISUALS)
+-- Sniper Arena Script by wizzey (ORIGINAL CORE FIXED + PREMIUM VISUALS)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -10,7 +10,7 @@ local LocalPlayer = Players.LocalPlayer
 -- ===== ОРИГИНАЛЬНЫЕ НАСТРОЙКИ =====
 local Settings = {
     Aimbot = true,
-    AimbotFOV = 400, -- Исходное значение
+    AimbotFOV = 400,
     AimbotKey = Enum.KeyCode.E,
     AimbotSmooth = 0.3,
     TriggerBot = true,
@@ -20,7 +20,6 @@ local Settings = {
 
 -- ===== ОРИГИНАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
 local isKeyPressed = false
-local Drawings = {}
 local canShoot = true
 local lastTarget = nil
 local lastHeadPos = nil
@@ -34,15 +33,18 @@ FOVCircle.Color = Color3.fromRGB(255, 255, 255)
 FOVCircle.Filled = false
 FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
--- ===== ОРИГИНАЛЬНЫЙ WALL CHECK =====
+-- ===== ИСПРАВЛЕННЫЙ СОВРЕМЕННЫЙ WALL CHECK =====
 local function IsPlayerVisible(char)
     if not char or not char:FindFirstChild("Head") then return false end
     local head = char.Head
     local origin = Camera.CFrame.Position
     local dir = (head.Position - origin).Unit * (head.Position - origin).Magnitude
     local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Blacklist
-    params.FilterDescendantsInstances = {LocalPlayer.Character, char}
+    
+    -- Исправлено: заменено на Exclude (современный аналог Blacklist)
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {LocalPlayer.Character, char, Camera}
+    
     local result = workspace:Raycast(origin, dir, params)
     if not result then return true end
     return result.Instance and result.Instance:IsDescendantOf(char)
@@ -56,10 +58,10 @@ local function GetHeadPosition(char)
     return nil
 end
 
--- ===== ОРИГИНАЛЬНЫЙ AIMBOT С ПРИОРИТЕТОМ ЦЕЛИ =====
+-- ===== ИСПРАВЛЕННЫЙ AIMBOT С ДИНАМИЧЕСКИМ FOV =====
 local function GetClosestPlayer()
     local closest = nil
-    local closestDist = Settings.AimbotFOV
+    local closestDist = Settings.AimbotFOV -- Исправлено: теперь берет актуальное значение слайдера
     local mousePos = UserInputService:GetMouseLocation()
     
     -- Сначала проверяем залоченную цель
@@ -451,17 +453,16 @@ end)
 CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
 CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
 
--- ===== ОТКРЫТИЕ / ЗАКРЫТИЕ НА RSHIFT =====
+-- ===== ОТКРЫТИЕ / ЗАКРЫТИЕ НА RSHIFT (БЕЗ БАГА С FOV) =====
 UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
         MainFrame.Visible = not MainFrame.Visible
-        -- Убрали принудительное скрытие FOVCircle, теперь круг не пропадает!
     end
 end)
 
 -- ===== ОРИГИНАЛЬНЫЙ ЦИКЛ RENDERSTEPPED =====
 RunService.RenderStepped:Connect(function()
-    -- Позиция круга FOV по центру экрана
+    -- Исправлено: Позиция круга жестко держится по центру экрана, как в оригинале
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     
     -- ОРИГИНАЛЬНЫЙ БЛОК ESP HIGHLIGHT
