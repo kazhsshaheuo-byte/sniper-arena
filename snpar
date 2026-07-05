@@ -1,7 +1,8 @@
--- Sniper Arena Script by wizzey (PERFECT LOCK-ON + INSTANT PERFECT TRIGGER)
+-- Sniper Arena Script by wizzey (GUI ULTRA LOCK)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
@@ -9,11 +10,13 @@ local Mouse = LocalPlayer:GetMouse()
 -- ===== НАСТРОЙКИ =====
 local Settings = {
     Aimbot = true,
-    AimbotFOV = 300,
+    AimbotFOV = 400,
     AimbotKey = Enum.KeyCode.E,
+    AimbotSmooth = 0.3,
     TriggerBot = true,
-    TriggerPrecision = 8, -- МАКСИМАЛЬНАЯ ТОЧНОСТЬ
+    TriggerPrecision = 12,
     ESP_Box = true,
+    ESP_ThroughWalls = true,
 }
 
 -- ===== ПЕРЕМЕННЫЕ =====
@@ -22,6 +25,344 @@ local Drawings = {}
 local canShoot = true
 local currentTarget = nil
 local lastTarget = nil
+local isGUIOpen = true
+local isDragging = false
+local dragStart = nil
+local dragOffset = nil
+
+-- ===== GUI =====
+local function CreateGUI()
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "PoloGUI"
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.ResetOnSpawn = false
+    sg.Parent = game:GetService("CoreGui")
+    
+    -- Main Frame
+    local main = Instance.new("Frame")
+    main.Size = UDim2.new(0, 380, 0, 450)
+    main.Position = UDim2.new(0.5, -190, 0.5, -225)
+    main.BackgroundColor3 = Color3.fromRGB(12, 8, 20)
+    main.BackgroundTransparency = 0.1
+    main.BorderSizePixel = 0
+    main.ClipsDescendants = true
+    main.Parent = sg
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 14)
+    corner.Parent = main
+    
+    -- Glow
+    local glow = Instance.new("Frame")
+    glow.Size = UDim2.new(1, 16, 1, 16)
+    glow.Position = UDim2.new(0, -8, 0, -8)
+    glow.BackgroundColor3 = Color3.fromRGB(100, 40, 180)
+    glow.BackgroundTransparency = 0.7
+    glow.BorderSizePixel = 0
+    glow.Parent = main
+    local glowCorner = Instance.new("UICorner")
+    glowCorner.CornerRadius = UDim.new(0, 20)
+    glowCorner.Parent = glow
+    
+    -- Заголовок
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 44)
+    titleBar.BackgroundColor3 = Color3.fromRGB(40, 20, 70)
+    titleBar.BackgroundTransparency = 0.2
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = main
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 14)
+    titleCorner.Parent = titleBar
+    
+    -- Градиент
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 50, 220)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 30, 180)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 50, 220))
+    })
+    gradient.Rotation = 45
+    gradient.Parent = titleBar
+    
+    -- Заголовок текст
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(0.75, 0, 1, 0)
+    title.Position = UDim2.new(0, 16, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "🎯 Sniper Arena | wizzey"
+    title.TextColor3 = Color3.fromRGB(230, 210, 255)
+    title.TextSize = 16
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Font = Enum.Font.GothamBold
+    title.TextStrokeColor3 = Color3.fromRGB(50, 20, 100)
+    title.TextStrokeTransparency = 0.5
+    title.Parent = titleBar
+    
+    -- Кнопка закрытия
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.new(0, 30, 0, 30)
+    close.Position = UDim2.new(1, -36, 0.5, -15)
+    close.BackgroundColor3 = Color3.fromRGB(60, 30, 100)
+    close.BackgroundTransparency = 0.3
+    close.BorderSizePixel = 0
+    close.Text = "✕"
+    close.TextColor3 = Color3.fromRGB(255, 255, 255)
+    close.TextSize = 16
+    close.Font = Enum.Font.GothamBold
+    close.Parent = titleBar
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 6)
+    closeCorner.Parent = close
+    
+    -- Перетаскивание
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+            dragStart = input.Position
+            dragOffset = main.Position
+        end
+    end)
+    titleBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local d = input.Position - dragStart
+            main.Position = UDim2.new(
+                dragOffset.X.Scale,
+                dragOffset.X.Offset + d.X,
+                dragOffset.Y.Scale,
+                dragOffset.Y.Offset + d.Y
+            )
+        end
+    end)
+    
+    -- Вкладки
+    local tabFrame = Instance.new("Frame")
+    tabFrame.Size = UDim2.new(1, 0, 0, 38)
+    tabFrame.Position = UDim2.new(0, 0, 0, 44)
+    tabFrame.BackgroundColor3 = Color3.fromRGB(25, 15, 45)
+    tabFrame.BackgroundTransparency = 0.3
+    tabFrame.BorderSizePixel = 0
+    tabFrame.Parent = main
+    
+    local tabs = {"🎯 Aimbot", "🔫 Trigger", "👁️ Visuals"}
+    local tabButtons = {}
+    local tabContents = {}
+    
+    for i, name in ipairs(tabs) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1 / #tabs, -4, 1, -4)
+        btn.Position = UDim2.new((i - 1) / #tabs, 2, 0, 2)
+        btn.BackgroundColor3 = i == 1 and Color3.fromRGB(120, 50, 220) or Color3.fromRGB(35, 20, 60)
+        btn.BackgroundTransparency = i == 1 and 0.2 or 0.4
+        btn.BorderSizePixel = 0
+        btn.Text = name
+        btn.TextColor3 = i == 1 and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 160, 210)
+        btn.TextSize = 12
+        btn.Font = Enum.Font.GothamBold
+        btn.Parent = tabFrame
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 6)
+        btnCorner.Parent = btn
+        tabButtons[i] = btn
+        
+        local content = Instance.new("ScrollingFrame")
+        content.Size = UDim2.new(1, -12, 1, -88)
+        content.Position = UDim2.new(0, 6, 0, 88)
+        content.BackgroundTransparency = 1
+        content.BorderSizePixel = 0
+        content.CanvasSize = UDim2.new(0, 0, 0, 0)
+        content.ScrollBarThickness = 3
+        content.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 180)
+        content.Visible = i == 1
+        content.Parent = main
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0, 6)
+        layout.Parent = content
+        tabContents[i] = content
+        
+        btn.MouseButton1Click:Connect(function()
+            for j, tab in ipairs(tabContents) do
+                tab.Visible = (j == i)
+                tabButtons[j].BackgroundColor3 = (j == i) and Color3.fromRGB(120, 50, 220) or Color3.fromRGB(35, 20, 60)
+                tabButtons[j].BackgroundTransparency = (j == i) and 0.2 or 0.4
+                tabButtons[j].TextColor3 = (j == i) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 160, 210)
+                tabButtons[j].TextSize = (j == i) and 13 or 12
+            end
+        end)
+    end
+    
+    -- Toggle
+    local function CreateToggle(parent, text, setting, default)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 0, 34)
+        frame.BackgroundColor3 = Color3.fromRGB(35, 20, 60)
+        frame.BackgroundTransparency = 0.4
+        frame.BorderSizePixel = 0
+        frame.Parent = parent
+        local fc = Instance.new("UICorner")
+        fc.CornerRadius = UDim.new(0, 6)
+        fc.Parent = frame
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.65, 0, 1, 0)
+        label.Position = UDim2.new(0, 12, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = Color3.fromRGB(210, 190, 240)
+        label.TextSize = 13
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = frame
+        
+        local btn = Instance.new("Frame")
+        btn.Size = UDim2.new(0, 44, 0, 22)
+        btn.Position = UDim2.new(1, -50, 0.5, -11)
+        btn.BackgroundColor3 = default and Color3.fromRGB(120, 50, 220) or Color3.fromRGB(50, 30, 80)
+        btn.BorderSizePixel = 0
+        btn.Parent = frame
+        local bc = Instance.new("UICorner")
+        bc.CornerRadius = UDim.new(0, 11)
+        bc.Parent = btn
+        
+        local slider = Instance.new("Frame")
+        slider.Size = UDim2.new(0, 16, 0, 16)
+        slider.Position = default and UDim2.new(1, -20, 0.5, -8) or UDim2.new(0, 4, 0.5, -8)
+        slider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        slider.BorderSizePixel = 0
+        slider.Parent = btn
+        local sc = Instance.new("UICorner")
+        sc.CornerRadius = UDim.new(0, 8)
+        sc.Parent = slider
+        
+        local state = default
+        local function toggle()
+            state = not state
+            Settings[setting] = state
+            btn.BackgroundColor3 = state and Color3.fromRGB(120, 50, 220) or Color3.fromRGB(50, 30, 80)
+            slider.Position = state and UDim2.new(1, -20, 0.5, -8) or UDim2.new(0, 4, 0.5, -8)
+        end
+        
+        frame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                toggle()
+            end
+        end)
+    end
+    
+    -- Slider
+    local function CreateSlider(parent, text, setting, min, max, default)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 0, 44)
+        frame.BackgroundColor3 = Color3.fromRGB(35, 20, 60)
+        frame.BackgroundTransparency = 0.4
+        frame.BorderSizePixel = 0
+        frame.Parent = parent
+        local fc = Instance.new("UICorner")
+        fc.CornerRadius = UDim.new(0, 6)
+        fc.Parent = frame
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -16, 0, 20)
+        label.Position = UDim2.new(0, 12, 0, 2)
+        label.BackgroundTransparency = 1
+        label.Text = text .. ": " .. tostring(default)
+        label.TextColor3 = Color3.fromRGB(210, 190, 240)
+        label.TextSize = 12
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Font = Enum.Font.Gotham
+        label.Parent = frame
+        
+        local slider = Instance.new("Frame")
+        slider.Size = UDim2.new(0.85, 0, 0, 4)
+        slider.Position = UDim2.new(0.05, 0, 0, 30)
+        slider.BackgroundColor3 = Color3.fromRGB(50, 30, 80)
+        slider.BorderSizePixel = 0
+        slider.Parent = frame
+        local sc = Instance.new("UICorner")
+        sc.CornerRadius = UDim.new(0, 2)
+        sc.Parent = slider
+        
+        local fill = Instance.new("Frame")
+        fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+        fill.BackgroundColor3 = Color3.fromRGB(120, 50, 220)
+        fill.BorderSizePixel = 0
+        fill.Parent = slider
+        local fc2 = Instance.new("UICorner")
+        fc2.CornerRadius = UDim.new(0, 2)
+        fc2.Parent = fill
+        
+        local handle = Instance.new("Frame")
+        handle.Size = UDim2.new(0, 12, 0, 12)
+        handle.Position = UDim2.new((default - min) / (max - min), -6, 0.5, -6)
+        handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        handle.BorderSizePixel = 0
+        handle.Parent = slider
+        local hc = Instance.new("UICorner")
+        hc.CornerRadius = UDim.new(0, 6)
+        hc.Parent = handle
+        
+        local dragging = false
+        local value = default
+        
+        local function update(input)
+            local pos = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
+            value = min + pos * (max - min)
+            value = math.round(value)
+            Settings[setting] = value
+            fill.Size = UDim2.new(pos, 0, 1, 0)
+            handle.Position = UDim2.new(pos, -6, 0.5, -6)
+            label.Text = text .. ": " .. tostring(value)
+        end
+        
+        handle.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true
+        end)
+        handle.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false
+        end)
+        slider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then update(input)
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input)
+        end)
+    end
+    
+    -- Aimbot
+    CreateToggle(tabContents[1], "Aimbot", "Aimbot", true)
+    CreateSlider(tabContents[1], "FOV", "AimbotFOV", 100, 600, 400)
+    CreateSlider(tabContents[1], "Smooth", "AimbotSmooth", 1, 10, 3)
+    
+    -- Trigger
+    CreateToggle(tabContents[2], "TriggerBot", "TriggerBot", true)
+    CreateSlider(tabContents[2], "Precision", "TriggerPrecision", 5, 30, 12)
+    
+    -- Visuals
+    CreateToggle(tabContents[3], "ESP Box", "ESP_Box", true)
+    CreateToggle(tabContents[3], "Through Walls", "ESP_ThroughWalls", true)
+    
+    -- Close
+    close.MouseButton1Click:Connect(function()
+        isGUIOpen = not isGUIOpen
+        main.Visible = isGUIOpen
+    end)
+    
+    UserInputService.InputBegan:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.RightShift then
+            isGUIOpen = not isGUIOpen
+            main.Visible = isGUIOpen
+        end
+    end)
+    
+    return sg
+end
+
+CreateGUI()
 
 -- ===== WALL CHECK =====
 local function IsPlayerVisible(char)
@@ -39,10 +380,12 @@ end
 
 local function GetHeadPosition(char)
     local head = char:FindFirstChild("Head")
-    return head and head.Position or nil
+    if head then
+        return head.Position
+    end
+    return nil
 end
 
--- ===== AIMBOT =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = Settings.AimbotFOV
@@ -86,13 +429,11 @@ local function GetClosestPlayer()
     return closest
 end
 
--- ===== ИДЕАЛЬНЫЙ ТРИГГЕР (СТРЕЛЯЕТ ТОЛЬКО ПРИ 100% ПОПАДАНИИ) =====
 local function IsPerfectAim(target)
     if not target or not target.Character then return false end
     local head = target.Character:FindFirstChild("Head")
     if not head then return false end
     
-    -- Проверка видимости
     if not IsPlayerVisible(target.Character) then
         return false
     end
@@ -103,28 +444,7 @@ local function IsPerfectAim(target)
     local mousePos = UserInputService:GetMouseLocation()
     local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
     
-    -- СТРОГАЯ ПРОВЕРКА - только при точном попадании
     if dist > Settings.TriggerPrecision then
-        return false
-    end
-    
-    -- Проверка что голова в центре экрана
-    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    local centerDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-    
-    -- Голова должна быть в центре экрана (не более 50 пикселей от центра)
-    if centerDist > 50 then
-        return false
-    end
-    
-    -- Проверка угла между прицелом и головой
-    local camPos = Camera.CFrame.Position
-    local camDir = Camera.CFrame.LookVector
-    local dirToHead = (head.Position - camPos).Unit
-    local angle = math.deg(math.acos(math.clamp(camDir:Dot(dirToHead), -1, 1)))
-    
-    -- Угол должен быть минимальным (почти идеальное наведение)
-    if angle > 0.5 then
         return false
     end
     
@@ -165,7 +485,6 @@ RunService.RenderStepped:Connect(function()
     end
     Drawings = {}
     
-    -- FOV
     local fovCircle = Drawing.new("Circle")
     fovCircle.Visible = true
     fovCircle.Radius = Settings.AimbotFOV
@@ -175,7 +494,6 @@ RunService.RenderStepped:Connect(function()
     fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     table.insert(Drawings, fovCircle)
     
-    -- ESP
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local char = player.Character
@@ -190,7 +508,9 @@ RunService.RenderStepped:Connect(function()
                 highlight.FillColor = Color3.fromRGB(255, 0, 0)
                 highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
                 highlight.FillTransparency = 0.3
-                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                if Settings.ESP_ThroughWalls then
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                end
             else
                 local h = char:FindFirstChild("PoloESP")
                 if h then h:Destroy() end
@@ -198,7 +518,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== TRIGGERBOT (ТОЛЬКО ПРИ ИДЕАЛЬНОМ НАВЕДЕНИИ) =====
     if Settings.TriggerBot and isKeyPressed and canShoot then
         local target = GetClosestPlayer()
         if target and IsPerfectAim(target) then
@@ -206,7 +525,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== AIMBOT (МГНОВЕННЫЙ ЛОК) =====
     if Settings.Aimbot and isKeyPressed then
         local target = GetClosestPlayer()
         if target then
@@ -218,12 +536,18 @@ RunService.RenderStepped:Connect(function()
                 local deltaX = screenPos.X - mousePos.X
                 local deltaY = screenPos.Y - mousePos.Y
                 
-                if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
+                if math.abs(deltaX) > 0.1 or math.abs(deltaY) > 0.1 then
                     pcall(function()
-                        mousemoverel(deltaX, deltaY)
+                        if Settings.AimbotSmooth <= 1 then
+                            mousemoverel(deltaX, deltaY)
+                        else
+                            mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
+                        end
                     end)
                 end
             end
+        else
+            lastTarget = nil
         end
     end
 end)
@@ -231,11 +555,11 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Sniper Arena",
-        Text = "Hold E - PERFECT LOCK + INSTANT TRIGGER",
+        Text = "GUI: Right Shift | Aimbot: E",
         Duration = 3
     })
 end)
 
-print("=== Sniper Arena Script by wizzey loaded ===")
-print("Hold E - PERFECT LOCK ON HEAD")
-print("Trigger: ONLY on 100% perfect aim")
+print("=== Sniper Arena GUI by wizzey loaded ===")
+print("Right Shift - toggle GUI")
+print("E - hold for aimbot")
