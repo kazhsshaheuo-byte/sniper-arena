@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (ZERO LAG TRIGGER 2026)
+-- Sniper Arena Script by wizzey (ZERO LAG TRIGGER FIXED)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -32,6 +32,7 @@ local Settings = {
 
 local isActivationKeyPressed = false
 local Connections = {} 
+local triggerCooldown = false
 
 -- ===== КРУГ FOV =====
 local FOVCircle = Drawing.new("Circle")
@@ -82,16 +83,29 @@ local function GetClosestPlayer()
     return closest
 end
 
--- МОМЕНТАЛЬНЫЙ ВЫСТРЕЛ ЧЕРЕЗ АКТИВАЦИЮ ИНСТРУМЕНТА
+-- ===== МГНОВЕННЫЙ ВЫСТРЕЛ (ЧЕРЕЗ MOUSE1CLICK) =====
 local function InstantShoot()
-    local character = LocalPlayer.Character
-    if character then
-        -- Ищем оружие, которое сейчас экипировано в персонаже
-        local tool = character:FindFirstChildOfClass("Tool")
-        if tool then
-            tool:Activate()
+    if triggerCooldown then return end
+    triggerCooldown = true
+    
+    pcall(function()
+        -- Способ 1: mouse1click (самый надежный)
+        mouse1click()
+    end)
+    
+    -- Способ 2: через Tool (если mouse1click не сработал)
+    pcall(function()
+        local character = LocalPlayer.Character
+        if character then
+            local tool = character:FindFirstChildOfClass("Tool")
+            if tool then
+                tool:Activate()
+            end
         end
-    end
+    end)
+    
+    task.wait(0.015)
+    triggerCooldown = false
 end
 
 table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
@@ -103,7 +117,7 @@ table.insert(Connections, UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then isActivationKeyPressed = false end
 end))
 
--- ===== GUI ИНТЕРФЕЙС =====
+-- ===== GUI =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "SniperArenaUI_DarkNeon"
 ScreenGui.ResetOnSpawn = false
@@ -495,7 +509,7 @@ table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gp
     end
 end))
 
--- ===== ЕДИНЫЙ ВЫСОКОТОЧНЫЙ ПОТОК =====
+-- ===== ОСНОВНОЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
     if not ScriptActive then return end 
     
@@ -539,46 +553,32 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- БЕЗЛАГОВЫЙ ТРИГГЕРБОТ (ПРЯМАЯ АКТИВАЦИЯ TOOL)
-    if Settings.TriggerBot and isActivationKeyPressed then
-        local targetFound = false
+    -- ===== МГНОВЕННЫЙ ТРИГГЕРБОТ (БЕЗ ЗАДЕРЖЕК) =====
+    if Settings.TriggerBot and isActivationKeyPressed and not triggerCooldown then
+        local target = GetClosestPlayer()
         
-        local targetObj = Mouse.Target
-        if targetObj and targetObj.Parent then
-            local hitModel = targetObj.Parent
-            if hitModel:IsA("Accessory") and hitModel.Parent then hitModel = hitModel.Parent end
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            local headPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
+            local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
             
-            local hitPlayer = Players:GetPlayerFromCharacter(hitModel)
-            if hitPlayer and hitPlayer ~= LocalPlayer and IsPlayerVisible(hitModel) then
-                targetFound = true
-            end
-        end
-        
-        if not targetFound then
-            local mouseRay = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-            local params = RaycastParams.new()
-            params.FilterType = Enum.RaycastFilterType.Exclude
-            params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-            
-            local result = workspace:Raycast(mouseRay.Origin, mouseRay.Direction.Unit * 1000, params)
-            if result and result.Instance then
-                local hitPart = result.Instance
-                local hitModel = hitPart.Parent
-                if hitModel:IsA("Accessory") and hitModel.Parent then hitModel = hitModel.Parent end
+            if onScreen then
+                local mousePos = UserInputService:GetMouseLocation()
+                local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
                 
-                local hitPlayer = Players:GetPlayerFromCharacter(hitModel)
-                if hitPlayer and hitPlayer ~= LocalPlayer and IsPlayerVisible(hitModel) then
-                    targetFound = true
+                if dist < Settings.AimbotFOV then
+                    -- МГНОВЕННЫЙ ВЫСТРЕЛ
+                    triggerCooldown = true
+                    pcall(function()
+                        mouse1click()
+                    end)
+                    task.wait(0.01)
+                    triggerCooldown = false
                 end
             end
         end
-        
-        if targetFound then
-            InstantShoot()
-        end
     end
     
-    -- ИДЕАЛЬНЫЙ АИМБОТ
+    -- ===== АИМБОТ =====
     if Settings.Aimbot and isActivationKeyPressed then
         local target = GetClosestPlayer()
         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
