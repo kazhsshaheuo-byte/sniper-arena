@@ -1,13 +1,15 @@
--- Sniper Arena Script by wizzey (PRODUCTION READY 2026)
+-- Sniper Arena Script by wizzey (100% COMPATIBLE COMPACT VERSION)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- ===== ОРИГИНАЛЬНЫЕ НАСТРОЙКИ =====
+-- Ждем загрузки PlayerGui (более стабильно, чем CoreGui)
+local TargetGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- ===== НАСТРОЙКИ =====
 local Settings = {
     Aimbot = true,
     AimbotFOV = 200, 
@@ -19,12 +21,11 @@ local Settings = {
     ShowFOV = true,
 }
 
--- ===== ОРИГИНАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
 local isKeyPressed = false
 local canShoot = true
 local lastTarget = nil
 
--- ===== ОРИГИНАЛЬНЫЙ КРУГ FOV =====
+-- ===== КРУГ FOV =====
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = Settings.ShowFOV
 FOVCircle.Radius = Settings.AimbotFOV
@@ -33,7 +34,7 @@ FOVCircle.Color = Color3.fromRGB(255, 255, 255)
 FOVCircle.Filled = false
 FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
--- ===== ИСПРАВЛЕННЫЙ СОВРЕМЕННЫЙ WALL CHECK =====
+-- ===== ПРОВЕРКА ВИДИМОСТИ =====
 local function IsPlayerVisible(char)
     if not char or not char:FindFirstChild("Head") then return false end
     local head = char.Head
@@ -49,24 +50,15 @@ local function IsPlayerVisible(char)
     return result.Instance and result.Instance:IsDescendantOf(char)
 end
 
-local function GetHeadPosition(char)
-    local head = char:FindFirstChild("Head")
-    if head then
-        return head.Position
-    end
-    return nil
-end
-
--- ===== ИСПРАВЛЕННЫЙ AIMBOT С ДИНАМИЧЕСКИМ FOV =====
+-- ===== ПОИСК БЛИЖАЙШЕГО ИГРОКА =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = Settings.AimbotFOV
     local mousePos = UserInputService:GetMouseLocation()
     
     if lastTarget and lastTarget.Character and lastTarget.Character:FindFirstChild("Head") then
-        local headPos = GetHeadPosition(lastTarget.Character)
-        if headPos and IsPlayerVisible(lastTarget.Character) then
-            local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+        if IsPlayerVisible(lastTarget.Character) then
+            local pos, onScreen = Camera:WorldToViewportPoint(lastTarget.Character.Head.Position)
             if onScreen and pos.Z > 0 then
                 local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                 if dist < Settings.AimbotFOV then
@@ -78,93 +70,66 @@ local function GetClosestPlayer()
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            local char = player.Character
-            if IsPlayerVisible(char) then
-                local headPos = GetHeadPosition(char)
-                if headPos then
-                    local pos, onScreen = Camera:WorldToViewportPoint(headPos)
-                    if onScreen and pos.Z > 0 then
-                        local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                        if dist < closestDist then
-                            closestDist = dist
-                            closest = player
-                        end
+            if IsPlayerVisible(player.Character) then
+                local head = player.Character.Head
+                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if onScreen and pos.Z > 0 then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        closest = player
                     end
                 end
             end
         end
     end
     
-    if closest then
-        lastTarget = closest
-    end
-    
+    if closest then lastTarget = closest end
     return closest
 end
 
--- ===== ОРИГИНАЛЬНЫЙ ТРИГГЕР =====
-local function IsPerfectAim(target)
-    if not target or not target.Character then return false end
-    local head = target.Character:FindFirstChild("Head")
-    if not head then return false end
-    
-    if not IsPlayerVisible(target.Character) then
-        return false
-    end
-    
-    local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
-    if not onScreen then return false end
-    
-    local mousePos = UserInputService:GetMouseLocation()
-    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-    
-    if dist > Settings.TriggerPrecision then
-        return false
-    end
-    
-    return true
-end
-
+-- ===== ВЫСТРЕЛ С ВАЛИДАЦИЕЙ =====
 local function Shoot()
     if not canShoot then return end
     canShoot = false
     
     task.spawn(function()
-        pcall(function()
-            mouse1click()
-        end)
-        task.wait(0.01)
+        if mouse1click then
+            pcall(mouse1click)
+        elseif mouse1press and mouse1release then
+            pcall(mouse1press)
+            task.wait(0.01)
+            pcall(mouse1release)
+        end
+        task.wait(0.05)
         canShoot = true
     end)
 end
 
--- ===== ХЕНДЛЕРЫ КЛАВИШ АИМА =====
+-- ===== ВВОД КЛАВИШ =====
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    if input.KeyCode == Settings.AimbotKey then
-        isKeyPressed = true
-    end
+    if input.KeyCode == Settings.AimbotKey then isKeyPressed = true end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Settings.AimbotKey then
+    if input.KeyCode == Settings.AimbotKey then 
         isKeyPressed = false
         lastTarget = nil
     end
 end)
 
--- ===== СОЗДАНИЕ УЛЬТРА КРАСИВОГО GUI =====
+-- ===== СОЗДАНИЕ PREMIUM GUI =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "SniperArenaUI_Premium"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = CoreGui
+ScreenGui.Parent = TargetGui
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 470, 0, 330)
 MainFrame.Position = UDim2.new(0.5, -235, 0.5, -165)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
-MainFrame.BackgroundTransparency = 0.05
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -400,3 +365,127 @@ local function CreateSlider(parent, text, min, max, default, callback)
     UserInputService.InputChanged:Connect(function(input)
         if IsDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             UpdateSlider()
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            IsDragging = false
+        end
+    end)
+end
+
+for i, tabData in ipairs(Tabs) do
+    local TBtn = Instance.new("TextButton")
+    TBtn.Size = UDim2.new(1, 0, 0, 36)
+    TBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+    TBtn.Text = "  " .. tabData.Icon .. "  " .. tabData.Name
+    TBtn.TextColor3 = Color3.fromRGB(160, 160, 165)
+    TBtn.Font = Enum.Font.GothamMedium
+    TBtn.TextSize = 12
+    TBtn.TextXAlignment = Enum.TextXAlignment.Left
+    TBtn.Parent = TabContainer
+    
+    local BCorn = Instance.new("UICorner")
+    BCorn.CornerRadius = UDim.new(0, 6)
+    BCorn.Parent = TBtn
+    
+    local BStroke = Instance.new("UIStroke")
+    BStroke.Thickness = 1
+    BStroke.Color = Color3.fromRGB(40, 40, 45)
+    BStroke.Parent = TBtn
+    
+    if i == 1 then
+        currentActiveButton = TBtn
+        TBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+        TBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+    
+    TBtn.MouseButton1Click:Connect(function()
+        SwitchTab(tabData.Name, TBtn)
+    end)
+end
+
+-- ===== РЕНДЕР МЕНЮ =====
+CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
+CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) 
+CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v)
+    Settings.AimbotFOV = v
+    FOVCircle.Radius = v
+end)
+
+CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
+CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
+
+-- Переключение на RightShift
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
+-- ===== ГЛАВНЫЙ ЦИКЛ ОБРАБОТКИ БЕЗ ОШИБОК =====
+RunService.RenderStepped:Connect(function()
+    -- Рендеринг FOV независимо от открытого меню
+    FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    
+    -- ESP БЛОК
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            if Settings.ESP_Box and char:FindFirstChild("Head") then
+                local highlight = char:FindFirstChild("PoloESP")
+                if not highlight then
+                    highlight = Instance.new("Highlight")
+                    highlight.Name = "PoloESP"
+                    highlight.Parent = char
+                end
+                highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                highlight.FillTransparency = 0.3
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            else
+                local h = char:FindFirstChild("PoloESP")
+                if h then h:Destroy() end
+            end
+        end
+    end
+    
+    -- ЛОГИКА AIMBOT И TRIGGERBOT
+    if isKeyPressed then
+        local target = GetClosestPlayer()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            local head = target.Character.Head
+            local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+            
+            if onScreen then
+                local mousePos = UserInputService:GetMouseLocation()
+                local deltaX = screenPos.X - mousePos.X
+                local deltaY = screenPos.Y - mousePos.Y
+                local dist = Vector2.new(deltaX, deltaY).Magnitude
+                
+                -- Логика авто-выстрела (Triggerbot)
+                if Settings.TriggerBot and canShoot and dist <= Settings.TriggerPrecision then
+                    Shoot()
+                end
+                
+                -- Логика плавного наведения (Aimbot)
+                if Settings.Aimbot and dist > 0.5 then
+                    local smooth = math.clamp(Settings.AimbotSmooth, 0.05, 1)
+                    
+                    -- Проверяем поддержку mousemoverel вашим инжектором
+                    if mousemoverel then
+                        pcall(function()
+                            mousemoverel(deltaX * smooth, deltaY * smooth)
+                        end)
+                    else
+                        -- Универсальный обходной путь (Camera CFrame CFrame), если мышь заблокирована
+                        local targetCFrame = CFrame.new(Camera.CFrame.Position, head.Position)
+                        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, smooth)
+                    end
+                end
+            end
+        end
+    end
+end)
