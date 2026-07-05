@@ -1,9 +1,9 @@
--- Sniper Arena Script by wizzey (ULTIMATE TRIGGER FORCED UPDATE 2026)
+-- Sniper Arena Script by wizzey (100% ACCURATE TRIGGER & KEYBIND UPDATE 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local VirtualInputManager = game:GetService("VirtualInputManager") -- Фикс клика
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -21,14 +21,14 @@ end
 local Settings = {
     Aimbot = true,
     AimbotFOV = 250, 
-    AimbotKey = Enum.KeyCode.E,
+    AimbotKey = Enum.KeyCode.E, -- Единая клавиша для Аима и Триггера
     TriggerBot = true,
     ESP_Box = true,
     ShowFOV = true,
     HeadSize = 6,
 }
 
-local isKeyPressed = false
+local isActivationKeyPressed = false
 local lastShot = 0
 
 -- ===== КРУГ FOV =====
@@ -56,7 +56,7 @@ local function IsPlayerVisible(char)
     return result.Instance and result.Instance:IsDescendantOf(char)
 end
 
--- Поиск цели
+-- Поиск цели для Аимбота
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = Settings.AimbotFOV
@@ -82,38 +82,28 @@ local function GetClosestPlayer()
     return closest
 end
 
--- НОВЫЙ СИМУЛЯТОР ФИЗИЧЕСКОГО КЛИКА (ФИКС СТРЕЛЬБЫ)
-local function ForceShoot()
-    if tick() - lastShot < 0.1 then return end -- Ограничение скорострельности, чтобы не крашило оружие
-    lastShot = tick()
-    
-    task.spawn(function()
-        if mouse1click then 
-            pcall(mouse1click)
-        elseif mouse1press and mouse1release then
-            pcall(mouse1press)
-            task.wait(0.02)
-            pcall(mouse1release)
-        else
-            -- Жесткий обход через менеджер виртуального ввода Roblox
-            local x, y = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2
-            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
-            task.wait(0.02)
-            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
-        end
-    end)
+-- МОМЕНТАЛЬНЫЙ ОФИЦИАЛЬНЫЙ ВЫСТРЕЛ БЕЗ ЗАДЕРЖЕК
+local function InstantShoot()
+    local x, y = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2
+    VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
+    VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
 end
 
+-- Отслеживание нажатия клавиши активации (E)
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    if input.KeyCode == Settings.AimbotKey then isKeyPressed = true end
+    if input.KeyCode == Settings.AimbotKey then 
+        isActivationKeyPressed = true 
+    end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Settings.AimbotKey then isKeyPressed = false end
+    if input.KeyCode == Settings.AimbotKey then 
+        isActivationKeyPressed = false 
+    end
 end)
 
--- ===== СОЗДАНИЕ ВЕЛИКОЛЕПНОЙ PREMIUM GUI =====
+-- ===== ВЕЛИКОЛЕПНАЯ PREMIUM GUI =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "SniperArenaUI_PremiumNeon"
 ScreenGui.ResetOnSpawn = false
@@ -398,7 +388,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then MainFrame.Visible = not MainFrame.Visible end
 end)
 
--- ===== ОБНОВЛЕННЫЙ ЦИКЛ ОБРАБОТКИ =====
+-- ===== ЦИКЛ ВЫЧИСЛЕНИЙ С ВЫСОКОЙ ТОЧНОСТЬЮ =====
 RunService.RenderStepped:Connect(function()
     FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
@@ -438,31 +428,33 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- АБСОЛЮТНО ФИКСИРОВАННЫЙ ТРИГГЕРБОТ
-    if Settings.TriggerBot then
-        -- Берём луч из реальной математической точки прицела экрана (с учётом инсета)
-        local mouseRay = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    -- СВЕРХТОЧНЫЙ ТРИГГЕРБОТ (ТОЛЬКО ПРИ ЗАЖАТОЙ "E")
+    if Settings.TriggerBot and isActivationKeyPressed then
+        local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
         
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 local char = player.Character
                 
-                -- Координата центра НАСТОЯЩЕЙ головы
-                local realHeadCenter = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
+                -- Высчитываем строгие границы оригинальной головы (1.2 x 1.2 x 1.2) относительно центра шеи
+                local trueHeadCenter = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
                 
-                local rayOrigin = mouseRay.Origin
-                local rayDirection = mouseRay.Direction.Unit
-                local playerVector = realHeadCenter - rayOrigin
-                local dotProduct = playerVector:Dot(rayDirection)
+                -- Проекция 3D центра оригинальной головы на 2D экран
+                local headScreenPos, onScreen = Camera:WorldToViewportPoint(trueHeadCenter)
                 
-                if dotProduct > 0 then
-                    local closestPointOnRay = rayOrigin + (rayDirection * dotProduct)
-                    local distanceToTrueHead = (realHeadCenter - closestPointOnRay).Magnitude
+                if onScreen and headScreenPos.Z > 0 then
+                    -- Рассчитываем примерный радиус проекции оригинальной головы на экране в пикселях
+                    local edge3D = trueHeadCenter + Vector3.new(0.6, 0, 0)
+                    local edgeScreenPos = Camera:WorldToViewportPoint(edge3D)
+                    local trueHeadRadiusPixel = math.abs(headScreenPos.X - edgeScreenPos.X)
                     
-                    -- Если прицел наведён прямо в границы оригинальной головы (1.5 студа)
-                    if distanceToTrueHead <= 1.5 then
+                    -- Проверяем, находится ли центр экрана строго внутри проекции оригинальной головы противника
+                    local distanceToCrosshair = (Vector2.new(headScreenPos.X, headScreenPos.Y) - screenCenter).Magnitude
+                    
+                    if distanceToCrosshair <= trueHeadRadiusPixel then
+                        -- Финальная проверка на отсутствие текстур/стен между вами
                         if IsPlayerVisible(char) then
-                            ForceShoot()
+                            InstantShoot()
                             break
                         end
                     end
@@ -471,8 +463,8 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ФИКСИРОВАННЫЙ АИМБОТ
-    if isKeyPressed and Settings.Aimbot then
+    -- СИНХРОННЫЙ АИМБОТ (РАБОТАЕТ НА ЗАЖАТУЮ "E")
+    if Settings.Aimbot and isActivationKeyPressed then
         local target = GetClosestPlayer()
         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
             local exactHeadPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
