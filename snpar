@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey
+-- Sniper Arena Script by wizzey (FINAL)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,14 +8,14 @@ local Mouse = LocalPlayer:GetMouse()
 
 local Settings = {
     Aimbot = true,
-    AimbotFOV = 300,
+    AimbotFOV = 350,
     AimbotKey = Enum.KeyCode.E,
     AimbotSmooth = 1,
-    AimbotWallCheck = true,
+    AimbotWallCheck = false,
     TriggerBot = true,
-    TriggerPrecision = 15,
+    TriggerPrecision = 20,
     TriggerDelay = 0.05,
-    ESP = true
+    ESP = true,
 }
 
 local isKeyPressed = false
@@ -69,12 +69,8 @@ local function GetClosestPlayer()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
-            
-            if Settings.AimbotWallCheck and not IsPlayerVisible(character) then
-                continue
-            end
-            
             local headPos = GetHeadPosition(character)
+            
             if headPos then
                 local pos, onScreen = Camera:WorldToViewportPoint(headPos)
                 
@@ -103,7 +99,7 @@ local function IsAimingAtHead(target)
         return false
     end
     
-    if Settings.AimbotWallCheck and not IsPlayerVisible(target.Character) then
+    if not IsPlayerVisible(target.Character) then
         return false
     end
     
@@ -153,9 +149,8 @@ RunService.RenderStepped:Connect(function()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
-            local isVisible = IsPlayerVisible(character)
             
-            if Settings.ESP and isVisible then
+            if Settings.ESP then
                 local highlight = character:FindFirstChild("PoloESP")
                 
                 if not highlight then
@@ -166,11 +161,10 @@ RunService.RenderStepped:Connect(function()
                 
                 highlight.FillColor = Color3.fromRGB(255, 0, 0)
                 highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                highlight.FillTransparency = 0.4
+                highlight.FillTransparency = 0.3
                 highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             else
                 local highlight = character:FindFirstChild("PoloESP")
-                
                 if highlight then
                     highlight:Destroy()
                 end
@@ -216,7 +210,7 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Sniper Arena",
-        Text = "Hold E for aimbot",
+        Text = "Hold E for aimbot | ESP through walls",
         Duration = 3
     })
 end)
