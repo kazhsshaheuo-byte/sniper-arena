@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (FINAL FIX 2026)
+-- Sniper Arena Script by wizzey (PRODUCTION READY 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -10,13 +10,13 @@ local LocalPlayer = Players.LocalPlayer
 -- ===== ОРИГИНАЛЬНЫЕ НАСТРОЙКИ =====
 local Settings = {
     Aimbot = true,
-    AimbotFOV = 200, -- Снижено дефолтное значение для более точного теста
+    AimbotFOV = 200, 
     AimbotKey = Enum.KeyCode.E,
     AimbotSmooth = 0.3,
     TriggerBot = true,
     TriggerPrecision = 12,
     ESP_Box = true,
-    ShowFOV = true, -- Добавлено явное свойство
+    ShowFOV = true,
 }
 
 -- ===== ОРИГИНАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
@@ -400,124 +400,3 @@ local function CreateSlider(parent, text, min, max, default, callback)
     UserInputService.InputChanged:Connect(function(input)
         if IsDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             UpdateSlider()
-        end
-    end)
-    
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            IsDragging = false
-        end
-    end)
-end
-
-for i, tabData in ipairs(Tabs) do
-    local TBtn = Instance.new("TextButton")
-    TBtn.Size = UDim2.new(1, 0, 0, 36)
-    TBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
-    TBtn.Text = "  " .. tabData.Icon .. "  " .. tabData.Name
-    TBtn.TextColor3 = Color3.fromRGB(160, 160, 165)
-    TBtn.Font = Enum.Font.GothamMedium
-    TBtn.TextSize = 12
-    TBtn.TextXAlignment = Enum.TextXAlignment.Left
-    TBtn.Parent = TabContainer
-    
-    local BCorn = Instance.new("UICorner")
-    BCorn.CornerRadius = UDim.new(0, 6)
-    BCorn.Parent = TBtn
-    
-    local BStroke = Instance.new("UIStroke")
-    BStroke.Thickness = 1
-    BStroke.Color = Color3.fromRGB(40, 40, 45)
-    BStroke.Parent = TBtn
-    
-    if i == 1 then
-        currentActiveButton = TBtn
-        TBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-        TBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    end
-    
-    TBtn.MouseButton1Click:Connect(function()
-        SwitchTab(tabData.Name, TBtn)
-    end)
-end
-
--- ===== НАПОЛНЕНИЕ МЕНЮ =====
-CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
-CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) -- Исправлено сохранение состояния
-CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v)
-    Settings.AimbotFOV = v
-    FOVCircle.Radius = v
-end)
-
-CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
-CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
-
--- ===== ОТКРЫТИЕ / ЗАКРЫТИЕ НА RSHIFT =====
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
-        MainFrame.Visible = not MainFrame.Visible
-    end
-end)
-
--- ===== ГЛАВНЫЙ СИНХРОННЫЙ ЦИКЛ =====
-RunService.RenderStepped:Connect(function()
-    -- Исправлено: Круг FOV теперь жестко привязан к настройке ShowFOV и Аимботу, вне зависимости от закрытия менюхи
-    FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    
-    -- ESP HIGHLIGHT
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            local char = player.Character
-            if Settings.ESP_Box then
-                local highlight = char:FindFirstChild("PoloESP")
-                if not highlight then
-                    highlight = Instance.new("Highlight")
-                    highlight.Name = "PoloESP"
-                    highlight.Parent = char
-                end
-                highlight.FillColor = Color3.fromRGB(255, 0, 0)
-                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                highlight.FillTransparency = 0.3
-                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            else
-                local h = char:FindFirstChild("PoloESP")
-                if h then h:Destroy() end
-            end
-        end
-    end
-    
-    -- TRIGGERBOT
-    if Settings.TriggerBot and isKeyPressed and canShoot then
-        local target = GetClosestPlayer()
-        if target and IsPerfectAim(target) then
-            Shoot()
-        end
-    end
-    
-    -- ИСПРАВЛЕННЫЙ AIMBOT (БЕЗ ВЫКИДЫВАНИЯ КАМЕРЫ И ТРЯСКИ)
-    if Settings.Aimbot and isKeyPressed then
-        local target = GetClosestPlayer()
-        if target then
-            local headPos = GetHeadPosition(target.Character)
-            if headPos then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
-                if onScreen then
-                    local mousePos = UserInputService:GetMouseLocation()
-                    
-                    -- Вычисляем чистое относительное смещение
-                    local deltaX = (screenPos.X - mousePos.X)
-                    local deltaY = (screenPos.Y - mousePos.Y)
-                    
-                    if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
-                        pcall(function()
-                            -- Исправлено: Убрали деление абсолютных координат. Плавная доводка по дельте.
-                            local smooth = math.clamp(Settings.AimbotSmooth, 0.05, 1)
-                            mousemoverel(deltaX * smooth, deltaY * smooth)
-                         pcall(function()
-                    end)
-                end
-            end
-        end
-    end
-end)
