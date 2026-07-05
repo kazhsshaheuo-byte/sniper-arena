@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (PREMIUM ANIMATED & FIXED TRIGGER 2026)
+-- Sniper Arena Script by wizzey (PREMIUM ANIMATED + UNLOAD SYSTEM 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -7,7 +7,10 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Поиск родителя для отрисовки поверх ESC
+-- Флаг работы скрипта (нужен для полной выгрузки)
+local ScriptActive = true
+
+-- Поиск родителя для отрисовки
 local TopGui = nil
 if gethui then
     TopGui = gethui()
@@ -25,11 +28,12 @@ local Settings = {
     TriggerBot = true,
     ESP_Box = true,
     ShowFOV = true,
-    ExpandHeads = false, -- По дефолту ВЫКЛЮЧЕНО
+    ExpandHeads = false,
     HeadSize = 6,
 }
 
 local isActivationKeyPressed = false
+local Connections = {} -- Таблица для отслеживания подключений событий
 
 -- ===== КРУГ FOV =====
 local FOVCircle = Drawing.new("Circle")
@@ -90,16 +94,16 @@ local function InstantShoot()
 end
 
 -- Отслеживание нажатия клавиши активации (E)
-UserInputService.InputBegan:Connect(function(input, gpe)
+table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if input.KeyCode == Settings.AimbotKey then isActivationKeyPressed = true end
-end)
+end))
 
-UserInputService.InputEnded:Connect(function(input)
+table.insert(Connections, UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then isActivationKeyPressed = false end
-end)
+end))
 
--- ===== СОЗДАНИЕ PREMIUM ЖИВОЙ GUI =====
+-- ===== СОЗДАНИЕ PREMIUM GUI =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "SniperArenaUI_PremiumAnimated"
 ScreenGui.ResetOnSpawn = false
@@ -124,7 +128,7 @@ MainStroke.Color = Color3.fromRGB(0, 255, 204)
 MainStroke.Transparency = 0.65
 MainStroke.Parent = MainFrame
 
--- ПЛАВНЫЙ СУПЕР-ДРАГГИНГ (Smooth Dragging)
+-- ПЛАВНЫЙ СУПЕР-ДРАГГИНГ
 local dragging = false
 local dragInput, dragStart, startPos
 local function updateDrag(input)
@@ -134,7 +138,7 @@ local function updateDrag(input)
     }):Play()
 end
 
-MainFrame.InputBegan:Connect(function(input)
+table.insert(Connections, MainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
@@ -143,17 +147,17 @@ MainFrame.InputBegan:Connect(function(input)
             if input.UserInputState == Enum.UserInputState.End then dragging = false end
         end)
     end
-end)
+end))
 
-MainFrame.InputChanged:Connect(function(input)
+table.insert(Connections, MainFrame.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
-end)
+end))
 
-UserInputService.InputChanged:Connect(function(input)
+table.insert(Connections, UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then updateDrag(input) end
-end)
+end))
 
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 50)
@@ -218,7 +222,6 @@ local Tabs = {
 }
 
 local function CreatePage(name)
-    -- Используем CanvasGroup для идеальной плавной прозрачности при открытии
     local Page = Instance.new("CanvasGroup")
     Page.Size = UDim2.new(1, -20, 1, -20)
     Page.Position = UDim2.new(0, 10, 0, 10)
@@ -242,7 +245,6 @@ local currentActiveButton = nil
 local function SwitchTab(tabName, button)
     if currentActiveButton == button then return end
     
-    -- Плавное исчезновение старой страницы
     for name, page in pairs(Pages) do
         if page.Visible and name ~= tabName then
             TweenService:Create(page, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {GroupTransparency = 1}):Play()
@@ -250,7 +252,6 @@ local function SwitchTab(tabName, button)
         end
     end
     
-    -- Плавное появление новой страницы
     local newPage = Pages[tabName]
     newPage.Visible = true
     TweenService:Create(newPage, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {GroupTransparency = 0}):Play()
@@ -392,10 +393,42 @@ local function CreateSlider(parent, text, min, max, default, callback)
     end
     
     SliderBG.MouseButton1Down:Connect(function() IsDragging = true; UpdateSlider() end)
-    UserInputService.InputChanged:Connect(function(input) if IsDragging and input.UserInputType == Enum.UserInputType.MouseMovement then UpdateSlider() end end)
-    UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then IsDragging = false end end)
+    table.insert(Connections, UserInputService.InputChanged:Connect(function(input) if IsDragging and input.UserInputType == Enum.UserInputType.MouseMovement then UpdateSlider() end end))
+    table.insert(Connections, UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then IsDragging = false end end))
 end
 
+-- КНОПКА ВЫГРУЗКИ (Unload Button)
+local function CreateUnloadButton(parent, text, callback)
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(1, 0, 0, 42)
+    Button.BackgroundColor3 = Color3.fromRGB(45, 15, 20)
+    Button.Text = text
+    Button.TextColor3 = Color3.fromRGB(255, 100, 100)
+    Button.Font = Enum.Font.GothamBold
+    Button.TextSize = 13
+    Button.Parent = parent
+    
+    local BCorn = Instance.new("UICorner")
+    BCorn.CornerRadius = UDim.new(0, 8)
+    BCorn.Parent = Button
+    
+    local BStroke = Instance.new("UIStroke")
+    BStroke.Thickness = 1
+    BStroke.Color = Color3.fromRGB(120, 40, 50)
+    BStroke.Parent = Button
+    
+    -- Анимация наведения/клика
+    Button.MouseEnter:Connect(function()
+        TweenService:Create(Button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(65, 20, 25)}):Play()
+    end)
+    Button.MouseLeave:Connect(function()
+        TweenService:Create(Button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 15, 20)}):Play()
+    end)
+    
+    Button.MouseButton1Click:Connect(callback)
+end
+
+-- Генерация элементов вкладок
 for i, tabData in ipairs(Tabs) do
     local TBtn = Instance.new("TextButton")
     TBtn.Size = UDim2.new(1, 0, 0, 40)
@@ -420,7 +453,6 @@ for i, tabData in ipairs(Tabs) do
     TBtn.MouseButton1Click:Connect(function() SwitchTab(tabData.Name, TBtn) end)
 end
 
--- Распределение элементов
 CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
 CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) 
 CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v) Settings.AimbotFOV = v; FOVCircle.Radius = v end)
@@ -428,13 +460,47 @@ CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, f
 CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
 CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
 
--- ВКЛАДКА MISC (С ТУМБЛЕРОМ НА ХИТБОКСЫ)
+-- ВКЛАДКА MISC (Добавлена выгрузка)
 CreateToggle(Pages["Misc"], "Включить расширение голов", Settings.ExpandHeads, function(v) Settings.ExpandHeads = v end)
 CreateSlider(Pages["Misc"], "Размер хитбокса головы", 1, 15, Settings.HeadSize, function(v) Settings.HeadSize = v end)
 
--- Переключение видимости меню на RightShift с эффектом затухания
+-- ФУНКЦИЯ ПОЛНОЙ ВЫГРУЗКИ СКРИПТА
+local function UnloadScript()
+    ScriptActive = false -- Убиваем главный поток RenderStepped
+    
+    -- Отключаем все глобальные ивенты ввода
+    for _, connection in pairs(Connections) do
+        if connection then connection:Disconnect() end
+    end
+    
+    -- Скрываем и уничтожаем круг отрисовки FOV
+    if FOVCircle then
+        FOVCircle.Visible = false
+        FOVCircle:Remove()
+    end
+    
+    -- Возвращаем головы игроков в исходное состояние и удаляем ESP
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character then
+            local head = player.Character:FindFirstChild("Head")
+            if head and head:IsA("BasePart") then
+                head.Size = Vector3.new(1.2, 1.2, 1.2)
+                head.Transparency = 0
+            end
+            local esp = player.Character:FindFirstChild("PoloESP")
+            if esp then esp:Destroy() end
+        end
+    end
+    
+    -- Уничтожаем графический интерфейс софта
+    if ScreenGui then ScreenGui:Destroy() end
+end
+
+CreateUnloadButton(Pages["Misc"], "ВЫГРУЗИТЬ СОФТ", UnloadScript)
+
+-- Открытие/Закрытие меню на RightShift
 local menuVisible = true
-UserInputService.InputBegan:Connect(function(input, gpe)
+table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then 
         menuVisible = not menuVisible
         TweenService:Create(MainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
@@ -443,10 +509,12 @@ UserInputService.InputBegan:Connect(function(input, gpe)
         }):Play()
         MainFrame.ClipsDescendants = true
     end
-end)
+end))
 
--- ===== ЕДИНЫЙ СИНХРОННЫЙ ПОТОК ДВИЖКА (RenderStepped) =====
+-- ===== ЕДИНЫЙ ПОТОК ДВИЖКА =====
 RunService.RenderStepped:Connect(function()
+    if not ScriptActive then return end -- Безопасный выход, если софт выгружен
+    
     FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     
@@ -463,11 +531,11 @@ RunService.RenderStepped:Connect(function()
                     head.CanCollide = false
                     head.Massless = true
                 else
-                    head.Size = Vector3.new(1.2, 1.2, 1.2) -- Дефолт
+                    head.Size = Vector3.new(1.2, 1.2, 1.2)
                     head.Transparency = 0
                 end
                 
-                -- Стильный неоновый ESP
+                -- ESP
                 if Settings.ESP_Box then
                     local highlight = char:FindFirstChild("PoloESP")
                     if not highlight then
@@ -487,7 +555,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- НЕУБИВАЕМЫЙ МАТЕМАТИЧЕСКИЙ ТРИГГЕР (ЗАЖАТА "E")
+    -- ТРИГГЕРБОТ
     if Settings.TriggerBot and isActivationKeyPressed then
         local ray = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
         local rayOrigin = ray.Origin
@@ -496,22 +564,18 @@ RunService.RenderStepped:Connect(function()
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 local char = player.Character
-                
-                -- Вычисляем точное 3D расположение центра реальной головы
                 local realHeadCenter = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
                 local playerVector = realHeadCenter - rayOrigin
                 local dotProduct = playerVector:Dot(rayDirection)
                 
                 if dotProduct > 0 then
                     local closestPointOnRay = rayOrigin + (rayDirection * dotProduct)
-                    -- Расстояние от луча нашего взгляда до центра оригинальной головы
                     local distanceToTrueHead = (realHeadCenter - closestPointOnRay).Magnitude
                     
-                    -- Проверяем попадание в реальные 1.2 студа хэдбокса
                     if distanceToTrueHead <= 1.2 then
                         if IsPlayerVisible(char) then
                             InstantShoot()
-                            break -- Один кадр — один выстрел по ближайшему
+                            break
                         end
                     end
                 end
@@ -519,7 +583,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- АИМБОТ НА КОМПЛЕКСНУЮ ФИКСАЦИЮ СМЕЩЕНИЯ (ЗАЖАТА "E")
+    -- АИМБОТ
     if Settings.Aimbot and isActivationKeyPressed then
         local target = GetClosestPlayer()
         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
