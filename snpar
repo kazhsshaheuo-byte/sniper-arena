@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (DARK NEON EDITION 2026)
+-- Sniper Arena Script by wizzey (INSTANT TRIGGER EDIT 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,10 +6,10 @@ local TweenService = game:GetService("TweenService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
 local ScriptActive = true
 
--- Поиск родителя для отрисовки поверх ESC
 local TopGui = nil
 if gethui then
     TopGui = gethui()
@@ -34,16 +34,15 @@ local Settings = {
 local isActivationKeyPressed = false
 local Connections = {} 
 
--- ===== КРУГ FOV (ВСЕГДА НА ЭКРАНЕ) =====
+-- ===== КРУГ FOV =====
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = Settings.ShowFOV
 FOVCircle.Radius = Settings.AimbotFOV
 FOVCircle.Thickness = 1.5
-FOVCircle.Color = Color3.fromRGB(255, 255, 255) -- Белый неон для круга
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
 FOVCircle.Filled = false
 FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
--- Проверка видимости стен
 local function IsPlayerVisible(char)
     if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
     local origin = Camera.CFrame.Position
@@ -59,7 +58,6 @@ local function IsPlayerVisible(char)
     return result.Instance and result.Instance:IsDescendantOf(char)
 end
 
--- Поиск цели для Аимбота
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = Settings.AimbotFOV
@@ -85,11 +83,11 @@ local function GetClosestPlayer()
     return closest
 end
 
--- МОМЕНТАЛЬНЫЙ ВЫСТРЕЛ
+-- МОМЕНТАЛЬНЫЙ КЛИК БЕЗ ЗАДЕРЖЕК
 local function InstantShoot()
     local x, y = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2
-    VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
-    VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
+    VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+    VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
 end
 
 table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
@@ -101,7 +99,7 @@ table.insert(Connections, UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then isActivationKeyPressed = false end
 end))
 
--- ===== СТИЛЬНАЯ ТЕМНО-СЕРАЯ GUI С ПРОЗРАЧНОСТЬЮ =====
+-- ===== GUI ИНТЕРФЕЙС =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "SniperArenaUI_DarkNeon"
 ScreenGui.ResetOnSpawn = false
@@ -113,7 +111,7 @@ local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 520, 0, 360)
 MainFrame.Position = UDim2.new(0.5, -260, 0.5, -180)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
-MainFrame.BackgroundTransparency = 0.2 -- Прозрачность меню
+MainFrame.BackgroundTransparency = 0.2
 MainFrame.Active = true
 MainFrame.Parent = ScreenGui
 
@@ -121,14 +119,12 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 16)
 MainCorner.Parent = MainFrame
 
--- Белая неоновая обводка
 local MainStroke = Instance.new("UIStroke")
 MainStroke.Thickness = 2
 MainStroke.Color = Color3.fromRGB(255, 255, 255)
 MainStroke.Transparency = 0.2 
 MainStroke.Parent = MainFrame
 
--- Кастомный Драггинг
 local dragging = false
 local dragInput, dragStart, startPos
 local function updateDrag(input)
@@ -181,7 +177,7 @@ TitleFix.Parent = TitleBar
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 1, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "    WIZZEY_WARE <font color='#ffffff'>// dark neon</font>"
+Title.Text = "    WIZZEY_WARE <font color='#ffffff'>// rage edition</font>"
 Title.RichText = true
 Title.TextColor3 = Color3.fromRGB(200, 200, 205)
 Title.Font = Enum.Font.GothamBold
@@ -247,14 +243,12 @@ Pages["Аим"].GroupTransparency = 0
 local currentActiveButton = nil
 local function SwitchTab(tabName, button)
     if currentActiveButton == button then return end
-    
     for name, page in pairs(Pages) do
         if page.Visible and name ~= tabName then
             TweenService:Create(page, TweenInfo.new(0.15), {GroupTransparency = 1}):Play()
             task.delay(0.15, function() page.Visible = false end)
         end
     end
-    
     local newPage = Pages[tabName]
     newPage.Visible = true
     TweenService:Create(newPage, TweenInfo.new(0.2), {GroupTransparency = 0}):Play()
@@ -266,13 +260,12 @@ local function SwitchTab(tabName, button)
         }):Play()
         currentActiveButton:FindFirstChildOfClass("UIStroke").Color = Color3.fromRGB(45, 45, 50)
     end
-    
     currentActiveButton = button
     TweenService:Create(button, TweenInfo.new(0.2), {
         BackgroundColor3 = Color3.fromRGB(40, 40, 45),
         TextColor3 = Color3.fromRGB(255, 255, 255)
     }):Play()
-    button:FindFirstChildOfClass("UIStroke").Color = Color3.fromRGB(255, 255, 255) -- Белый акцент активной вкладки
+    button:FindFirstChildOfClass("UIStroke").Color = Color3.fromRGB(255, 255, 255)
 end
 
 local function CreateToggle(parent, text, default, callback)
@@ -490,7 +483,6 @@ end
 
 CreateUnloadButton(Pages["Misc"], "ВЫГРУЗИТЬ СОФТ", UnloadScript)
 
--- Открытие/Закрытие меню (ФОВ ИГНОРИРУЕТ ЭТО НАЖАТИЕ И ОСТАЕТСЯ)
 local menuVisible = true
 table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then 
@@ -503,7 +495,6 @@ end))
 RunService.RenderStepped:Connect(function()
     if not ScriptActive then return end 
     
-    -- FOV ВСЕГДА НА ЭКРАНЕ (зависит только от настроек чита, а не видимости GUI)
     if FOVCircle then
         FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
@@ -532,7 +523,7 @@ RunService.RenderStepped:Connect(function()
                         highlight.Name = "PoloESP"
                         highlight.Parent = char
                     end
-                    highlight.FillColor = Color3.fromRGB(255, 255, 255) -- Белая обводка боксов под неон
+                    highlight.FillColor = Color3.fromRGB(255, 255, 255)
                     highlight.OutlineColor = Color3.fromRGB(200, 200, 205)
                     highlight.FillTransparency = 0.6
                     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
@@ -544,29 +535,45 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ИДЕАЛЬНЫЙ ТРИГГЕРБОТ
+    -- АГРЕССИВНЫЙ И МГНОВЕННЫЙ ТРИГГЕРБОТ
     if Settings.TriggerBot and isActivationKeyPressed then
-        local mouseRay = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-        local params = RaycastParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+        local targetFound = false
         
-        local result = workspace:Raycast(mouseRay.Origin, mouseRay.Direction.Unit * 1000, params)
-        
-        if result and result.Instance then
-            local hitPart = result.Instance
-            local hitModel = hitPart.Parent
-            
-            if hitModel:IsA("Accessory") and hitModel.Parent then
-                hitModel = hitModel.Parent
-            end
+        -- Метод 1: Проверка Mouse.Target (мгновенный отклик движка)
+        local targetObj = Mouse.Target
+        if targetObj and targetObj.Parent then
+            local hitModel = targetObj.Parent
+            if hitModel:IsA("Accessory") and hitModel.Parent then hitModel = hitModel.Parent end
             
             local hitPlayer = Players:GetPlayerFromCharacter(hitModel)
-            if hitPlayer and hitPlayer ~= LocalPlayer then
-                if IsPlayerVisible(hitModel) then
-                    InstantShoot()
+            if hitPlayer and hitPlayer ~= LocalPlayer and IsPlayerVisible(hitModel) then
+                targetFound = true
+            end
+        end
+        
+        -- Метод 2: Запасной Raycast по центру (если Mouse.Target пролетел сквозь прозрачную голову)
+        if not targetFound then
+            local mouseRay = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+            
+            local result = workspace:Raycast(mouseRay.Origin, mouseRay.Direction.Unit * 1000, params)
+            if result and result.Instance then
+                local hitPart = result.Instance
+                local hitModel = hitPart.Parent
+                if hitModel:IsA("Accessory") and hitModel.Parent then hitModel = hitModel.Parent end
+                
+                local hitPlayer = Players:GetPlayerFromCharacter(hitModel)
+                if hitPlayer and hitPlayer ~= LocalPlayer and IsPlayerVisible(hitModel) then
+                    targetFound = true
                 end
             end
+        end
+        
+        -- Если цель подтверждена хотя бы одним методом — стреляем без задержки
+        if targetFound then
+            InstantShoot()
         end
     end
     
