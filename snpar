@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (100% COMPATIBLE COMPACT VERSION)
+-- Sniper Arena Script by wizzey (ULTIMATE EDITION 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,7 +6,6 @@ local TweenService = game:GetService("TweenService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
--- Ждем загрузки PlayerGui (более стабильно, чем CoreGui)
 local TargetGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ===== НАСТРОЙКИ =====
@@ -14,11 +13,11 @@ local Settings = {
     Aimbot = true,
     AimbotFOV = 200, 
     AimbotKey = Enum.KeyCode.E,
-    AimbotSmooth = 0.3,
     TriggerBot = true,
-    TriggerPrecision = 12,
+    TriggerPrecision = 30, -- Немного увеличено под новый размер голов
     ESP_Box = true,
     ShowFOV = true,
+    HeadSize = 5, -- Размер расширения головы (Head Expander)
 }
 
 local isKeyPressed = false
@@ -88,7 +87,7 @@ local function GetClosestPlayer()
     return closest
 end
 
--- ===== ВЫСТРЕЛ С ВАЛИДАЦИЕЙ =====
+-- ===== ВЫСТРЕЛ =====
 local function Shoot()
     if not canShoot then return end
     canShoot = false
@@ -101,7 +100,7 @@ local function Shoot()
             task.wait(0.01)
             pcall(mouse1release)
         end
-        task.wait(0.05)
+        task.wait(0.02) -- Уменьшена задержка между выстрелами
         canShoot = true
     end)
 end
@@ -119,10 +118,12 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- ===== СОЗДАНИЕ PREMIUM GUI =====
+-- ===== СОЗДАНИЕ PREMIUM GUI (ПОВЕРХ ESC) =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "SniperArenaUI_Premium"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999999999 -- Отрисовка поверх всего, включая ESC
+ScreenGui.IgnoreGuiInset = true    -- Игнорировать верхнюю панель Roblox
 ScreenGui.Parent = TargetGui
 
 local MainFrame = Instance.new("Frame")
@@ -413,476 +414,68 @@ CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, f
     Settings.AimbotFOV = v
     FOVCircle.Radius = v
 end)
+CreateSlider(Pages["Аим"], "Head Expander Size", 1, 15, Settings.HeadSize, function(v) Settings.HeadSize = v end)
 
 CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
 CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
 
--- Переключение на RightShift
+-- Открытие/Закрытие на RightShift
 UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
         MainFrame.Visible = not MainFrame.Visible
     end
 end)
 
--- Sniper Arena Script by wizzey (100% COMPATIBLE COMPACT VERSION)
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local Camera = workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
-
--- Ждем загрузки PlayerGui (более стабильно, чем CoreGui)
-local TargetGui = LocalPlayer:WaitForChild("PlayerGui")
-
--- ===== НАСТРОЙКИ =====
-local Settings = {
-    Aimbot = true,
-    AimbotFOV = 200, 
-    AimbotKey = Enum.KeyCode.E,
-    AimbotSmooth = 0.3,
-    TriggerBot = true,
-    TriggerPrecision = 12,
-    ESP_Box = true,
-    ShowFOV = true,
-}
-
-local isKeyPressed = false
-local canShoot = true
-local lastTarget = nil
-
--- ===== КРУГ FOV =====
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Visible = Settings.ShowFOV
-FOVCircle.Radius = Settings.AimbotFOV
-FOVCircle.Thickness = 1
-FOVCircle.Color = Color3.fromRGB(255, 255, 255)
-FOVCircle.Filled = false
-FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-
--- ===== ПРОВЕРКА ВИДИМОСТИ =====
-local function IsPlayerVisible(char)
-    if not char or not char:FindFirstChild("Head") then return false end
-    local head = char.Head
-    local origin = Camera.CFrame.Position
-    local dir = (head.Position - origin).Unit * (head.Position - origin).Magnitude
-    local params = RaycastParams.new()
-    
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {LocalPlayer.Character, char, Camera}
-    
-    local result = workspace:Raycast(origin, dir, params)
-    if not result then return true end
-    return result.Instance and result.Instance:IsDescendantOf(char)
-end
-
--- ===== ПОИСК БЛИЖАЙШЕГО ИГРОКА =====
-local function GetClosestPlayer()
-    local closest = nil
-    local closestDist = Settings.AimbotFOV
-    local mousePos = UserInputService:GetMouseLocation()
-    
-    if lastTarget and lastTarget.Character and lastTarget.Character:FindFirstChild("Head") then
-        if IsPlayerVisible(lastTarget.Character) then
-            local pos, onScreen = Camera:WorldToViewportPoint(lastTarget.Character.Head.Position)
-            if onScreen and pos.Z > 0 then
-                local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                if dist < Settings.AimbotFOV then
-                    return lastTarget
-                end
-            end
-        end
-    end
-    
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            if IsPlayerVisible(player.Character) then
-                local head = player.Character.Head
-                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
-                if onScreen and pos.Z > 0 then
-                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        closest = player
-                    end
-                end
-            end
-        end
-    end
-    
-    if closest then lastTarget = closest end
-    return closest
-end
-
--- ===== ВЫСТРЕЛ С ВАЛИДАЦИЕЙ =====
-local function Shoot()
-    if not canShoot then return end
-    canShoot = false
-    
-    task.spawn(function()
-        if mouse1click then
-            pcall(mouse1click)
-        elseif mouse1press and mouse1release then
-            pcall(mouse1press)
-            task.wait(0.01)
-            pcall(mouse1release)
-        end
-        task.wait(0.05)
-        canShoot = true
-    end)
-end
-
--- ===== ВВОД КЛАВИШ =====
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Settings.AimbotKey then isKeyPressed = true end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Settings.AimbotKey then 
-        isKeyPressed = false
-        lastTarget = nil
-    end
-end)
-
--- ===== СОЗДАНИЕ PREMIUM GUI =====
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SniperArenaUI_Premium"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = TargetGui
-
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 470, 0, 330)
-MainFrame.Position = UDim2.new(0.5, -235, 0.5, -165)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.Parent = ScreenGui
-
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
-MainCorner.Parent = MainFrame
-
-local MainStroke = Instance.new("UIStroke")
-MainStroke.Thickness = 1.5
-MainStroke.Color = Color3.fromRGB(70, 70, 75)
-MainStroke.Transparency = 0.3
-MainStroke.Parent = MainFrame
-
-local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1, 0, 0, 45)
-TitleBar.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
-TitleBar.BorderSizePixel = 0
-TitleBar.Parent = MainFrame
-
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 12)
-TitleCorner.Parent = TitleBar
-
-local TitleFix = Instance.new("Frame")
-TitleFix.Size = UDim2.new(1, 0, 0, 15)
-TitleFix.Position = UDim2.new(0, 0, 1, -15)
-TitleFix.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
-TitleFix.BorderSizePixel = 0
-TitleFix.Parent = TitleBar
-
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 1, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "   sniper-arena <font color='#ffffff'>by wizzey</font>"
-Title.RichText = true
-Title.TextColor3 = Color3.fromRGB(150, 150, 155)
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 14
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TitleBar
-
-local TabContainer = Instance.new("Frame")
-TabContainer.Position = UDim2.new(0, 12, 0, 58)
-TabContainer.Size = UDim2.new(0, 120, 1, -70)
-TabContainer.BackgroundTransparency = 1
-TabContainer.Parent = MainFrame
-
-local TabLayout = Instance.new("UIListLayout")
-TabLayout.Padding = UDim.new(0, 6)
-TabLayout.Parent = TabContainer
-
-local ContentContainer = Instance.new("Frame")
-ContentContainer.Position = UDim2.new(0, 145, 0, 58)
-ContentContainer.Size = UDim2.new(1, -157, 1, -70)
-ContentContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
-ContentContainer.BorderSizePixel = 0
-ContentContainer.Parent = MainFrame
-
-local ContentCorner = Instance.new("UICorner")
-ContentCorner.CornerRadius = UDim.new(0, 10)
-ContentCorner.Parent = ContentContainer
-
-local ContentStroke = Instance.new("UIStroke")
-ContentStroke.Thickness = 1
-ContentStroke.Color = Color3.fromRGB(45, 45, 50)
-ContentStroke.Parent = ContentContainer
-
-local Pages = {}
-local Tabs = {
-    {Name = "Аим", Icon = "🎯"},
-    {Name = "ВХ", Icon = "👁️"},
-    {Name = "Триггер", Icon = "⚡"}
-}
-
-local function CreatePage(name)
-    local Page = Instance.new("ScrollingFrame")
-    Page.Size = UDim2.new(1, -16, 1, -16)
-    Page.Position = UDim2.new(0, 8, 0, 8)
-    Page.BackgroundTransparency = 1
-    Page.Visible = false
-    Page.CanvasSize = UDim2.new(0, 0, 0, 0)
-    Page.ScrollBarThickness = 0
-    Page.Parent = ContentContainer
-    
-    local Layout = Instance.new("UIListLayout")
-    Layout.Padding = UDim.new(0, 10)
-    Layout.SortOrder = Enum.SortOrder.LayoutOrder
-    Layout.Parent = Page
-    
-    Pages[name] = Page
-    return Page
-end
-
-for _, tabData in ipairs(Tabs) do CreatePage(tabData.Name) end
-Pages["Аим"].Visible = true
-
-local currentActiveButton = nil
-
-local function SwitchTab(tabName, button)
-    for name, page in pairs(Pages) do
-        page.Visible = (name == tabName)
-    end
-    if currentActiveButton then
-        TweenService:Create(currentActiveButton, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(22, 22, 26),
-            TextColor3 = Color3.fromRGB(160, 160, 165)
-        }):Play()
-    end
-    currentActiveButton = button
-    TweenService:Create(button, TweenInfo.new(0.2), {
-        BackgroundColor3 = Color3.fromRGB(45, 45, 52),
-        TextColor3 = Color3.fromRGB(255, 255, 255)
-    }):Play()
-end
-
-local function CreateToggle(parent, text, default, callback)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 38)
-    Frame.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
-    Frame.BorderSizePixel = 0
-    Frame.Parent = parent
-    
-    local FCorn = Instance.new("UICorner")
-    FCorn.CornerRadius = UDim.new(0, 6)
-    FCorn.Parent = Frame
-    
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0.7, 0, 1, 0)
-    Label.Text = "   " .. text
-    Label.TextColor3 = Color3.fromRGB(210, 210, 215)
-    Label.Font = Enum.Font.GothamMedium
-    Label.TextSize = 12
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.BackgroundTransparency = 1
-    Label.Parent = Frame
-    
-    local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(0, 42, 0, 20)
-    Button.Position = UDim2.new(1, -50, 0.5, -10)
-    Button.BackgroundColor3 = default and Color3.fromRGB(100, 100, 110) or Color3.fromRGB(45, 45, 50)
-    Button.Text = ""
-    Button.Parent = Frame
-    
-    local BCorn = Instance.new("UICorner")
-    BCorn.CornerRadius = UDim.new(0, 10)
-    BCorn.Parent = Button
-    
-    local CircleIndicator = Instance.new("Frame")
-    CircleIndicator.Size = UDim2.new(0, 14, 0, 14)
-    CircleIndicator.Position = default and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-    CircleIndicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    CircleIndicator.Parent = Button
-    
-    local CCorn = Instance.new("UICorner")
-    CCorn.CornerRadius = UDim.new(1, 0)
-    CCorn.Parent = CircleIndicator
-    
-    local state = default
-    Button.MouseButton1Click:Connect(function()
-        state = not state
-        TweenService:Create(Button, TweenInfo.new(0.2), {
-            BackgroundColor3 = state and Color3.fromRGB(100, 100, 110) or Color3.fromRGB(45, 45, 50)
-        }):Play()
-        TweenService:Create(CircleIndicator, TweenInfo.new(0.2), {
-            Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-        }):Play()
-        callback(state)
-    end)
-end
-
-local function CreateSlider(parent, text, min, max, default, callback)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 52)
-    Frame.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
-    Frame.Parent = parent
-    
-    local FCorn = Instance.new("UICorner")
-    FCorn.CornerRadius = UDim.new(0, 6)
-    FCorn.Parent = Frame
-    
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, 0, 0, 24)
-    Label.Text = "   " .. text .. ": <font color='#ffffff'>" .. tostring(default) .. "</font>"
-    Label.RichText = true
-    Label.TextColor3 = Color3.fromRGB(180, 180, 185)
-    Label.Font = Enum.Font.GothamMedium
-    Label.TextSize = 12
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.BackgroundTransparency = 1
-    Label.Parent = Frame
-    
-    local SliderBG = Instance.new("TextButton")
-    SliderBG.Size = UDim2.new(1, -26, 0, 5)
-    SliderBG.Position = UDim2.new(0, 13, 0, 34)
-    SliderBG.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-    SliderBG.Text = ""
-    SliderBG.Parent = Frame
-    
-    local SBGCorn = Instance.new("UICorner")
-    SBGCorn.CornerRadius = UDim.new(1, 0)
-    SBGCorn.Parent = SliderBG
-    
-    local SliderFill = Instance.new("Frame")
-    SliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    SliderFill.BackgroundColor3 = Color3.fromRGB(130, 130, 135)
-    SliderFill.BorderSizePixel = 0
-    SliderFill.Parent = SliderBG
-    
-    local SFCorn = Instance.new("UICorner")
-    SFCorn.CornerRadius = UDim.new(1, 0)
-    SFCorn.Parent = SliderFill
-    
-    local IsDragging = false
-    
-    local function UpdateSlider()
-        local MousePos = UserInputService:GetMouseLocation()
-        local RelativeX = MousePos.X - SliderBG.AbsolutePosition.X
-        local Percentage = math.clamp(RelativeX / SliderBG.AbsoluteSize.X, 0, 1)
-        
-        SliderFill.Size = UDim2.new(Percentage, 0, 1, 0)
-        local Value = math.floor(min + (Percentage * (max - min)))
-        Label.Text = "   " .. text .. ": <font color='#ffffff'>" .. tostring(Value) .. "</font>"
-        callback(Value)
-    end
-    
-    SliderBG.MouseButton1Down:Connect(function()
-        IsDragging = true
-        UpdateSlider()
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if IsDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            UpdateSlider()
-        end
-    end)
-    
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            IsDragging = false
-        end
-    end)
-end
-
-for i, tabData in ipairs(Tabs) do
-    local TBtn = Instance.new("TextButton")
-    TBtn.Size = UDim2.new(1, 0, 0, 36)
-    TBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
-    TBtn.Text = "  " .. tabData.Icon .. "  " .. tabData.Name
-    TBtn.TextColor3 = Color3.fromRGB(160, 160, 165)
-    TBtn.Font = Enum.Font.GothamMedium
-    TBtn.TextSize = 12
-    TBtn.TextXAlignment = Enum.TextXAlignment.Left
-    TBtn.Parent = TabContainer
-    
-    local BCorn = Instance.new("UICorner")
-    BCorn.CornerRadius = UDim.new(0, 6)
-    BCorn.Parent = TBtn
-    
-    local BStroke = Instance.new("UIStroke")
-    BStroke.Thickness = 1
-    BStroke.Color = Color3.fromRGB(40, 40, 45)
-    BStroke.Parent = TBtn
-    
-    if i == 1 then
-        currentActiveButton = TBtn
-        TBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-        TBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    end
-    
-    TBtn.MouseButton1Click:Connect(function()
-        SwitchTab(tabData.Name, TBtn)
-    end)
-end
-
--- ===== РЕНДЕР МЕНЮ =====
-CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
-CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) 
-CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v)
-    Settings.AimbotFOV = v
-    FOVCircle.Radius = v
-end)
-
-CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
-CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
-
--- Переключение на RightShift
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == Enum.KeyCode.RightShift then
-        MainFrame.Visible = not MainFrame.Visible
-    end
-end)
-
--- ===== ГЛАВНЫЙ ЦИКЛ ОБРАБОТКИ БЕЗ ОШИБОК =====
+-- ===== ГЛАВНЫЙ СИНХРОННЫЙ ЦИКЛ ОБРАБОТКИ =====
 RunService.RenderStepped:Connect(function()
-    -- Рендеринг FOV независимо от открытого меню
+    -- Отрисовка FOV
     FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     
-    -- ESP БЛОК
+    -- Цикл по игрокам (ESP + Head Expander)
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
             local char = player.Character
-            if Settings.ESP_Box and char:FindFirstChild("Head") then
-                local highlight = char:FindFirstChild("PoloESP")
-                if not highlight then
-                    highlight = Instance.new("Highlight")
-                    highlight.Name = "PoloESP"
-                    highlight.Parent = char
+            local head = char:FindFirstChild("Head")
+            
+            if head and head:IsA("BasePart") then
+                -- HEAD EXPANDER (Увеличиваем хитбокс головы)
+                if Settings.HeadSize > 1 then
+                    head.Size = Vector3.new(Settings.HeadSize, Settings.HeadSize, Settings.HeadSize)
+                    head.Transparency = 1 -- Оставляем невидимой, чтобы не мешала обзору
+                    head.CanCollide = false
+                else
+                    head.Size = Vector3.new(1.2, 1.2, 1.2) -- Дефолтный размер
+                    head.Transparency = 0
                 end
-                highlight.FillColor = Color3.fromRGB(255, 0, 0)
-                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                highlight.FillTransparency = 0.3
-                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            else
-                local h = char:FindFirstChild("PoloESP")
-                if h then h:Destroy() end
+                
+                -- ESP HIGHLIGHT
+                if Settings.ESP_Box then
+                    local highlight = char:FindFirstChild("PoloESP")
+                    if not highlight then
+                        highlight = Instance.new("Highlight")
+                        highlight.Name = "PoloESP"
+                        highlight.Parent = char
+                    end
+                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    highlight.FillTransparency = 0.3
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                else
+                    local h = char:FindFirstChild("PoloESP")
+                    if h then h:Destroy() end
+                end
             end
         end
     end
     
-    -- ЛОГИКА AIMBOT И TRIGGERBOT
+    -- МОМЕНТАЛЬНЫЙ АИМБОТ И ТРИГГЕРБОТ С ЦЕЛЬЮ В ГОЛОВУ
     if isKeyPressed then
         local target = GetClosestPlayer()
         if target and target.Character and target.Character:FindFirstChild("Head") then
             local head = target.Character.Head
+            
+            -- Наведение строго по центру детали головы
             local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
             
             if onScreen then
@@ -891,24 +484,18 @@ RunService.RenderStepped:Connect(function()
                 local deltaY = screenPos.Y - mousePos.Y
                 local dist = Vector2.new(deltaX, deltaY).Magnitude
                 
-                -- Логика авто-выстрела (Triggerbot)
+                -- Логика авто-выстрела
                 if Settings.TriggerBot and canShoot and dist <= Settings.TriggerPrecision then
                     Shoot()
                 end
                 
-                -- Логика плавного наведения (Aimbot)
-                if Settings.Aimbot and dist > 0.5 then
-                    local smooth = math.clamp(Settings.AimbotSmooth, 0.05, 1)
-                    
-                    -- Проверяем поддержку mousemoverel вашим инжектором
+                -- Моментальное наведение
+                if Settings.Aimbot then
+                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, head.Position)
                     if mousemoverel then
                         pcall(function()
-                            mousemoverel(deltaX * smooth, deltaY * smooth)
+                            mousemoverel(deltaX, deltaY)
                         end)
-                    else
-                        -- Универсальный обходной путь (Camera CFrame CFrame), если мышь заблокирована
-                        local targetCFrame = CFrame.new(Camera.CFrame.Position, head.Position)
-                        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, smooth)
                     end
                 end
             end
