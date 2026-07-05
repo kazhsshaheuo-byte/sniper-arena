@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (SMOOTH AIM + WALLCHECK)
+-- Sniper Arena Script by wizzey (PERFECT AIM - НИКАКОГО ОТСТАВАНИЯ)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,8 +11,8 @@ local Settings = {
     Aimbot = true,
     AimbotFOV = 300,
     AimbotKey = Enum.KeyCode.E,
-    AimbotSmooth = 5, -- ПЛАВНОСТЬ (чем больше, тем плавнее)
-    AimbotWallCheck = true, -- ВКЛЮЧАЕМ WALLCHECK ДЛЯ АИМБОТА
+    AimbotSmooth = 1.2, -- ОЧЕНЬ БЫСТРО, НО ПЛАВНО
+    AimbotWallCheck = true,
     
     TriggerBot = true,
     TriggerPrecision = 15,
@@ -26,6 +26,7 @@ local isAimbotKeyPressed = false
 local Drawings = {}
 local canShoot = true
 local currentTarget = nil
+local lastTarget = nil
 
 -- ===== WALL CHECK =====
 local function IsPlayerVisible(char)
@@ -46,17 +47,36 @@ local function GetHeadPosition(char)
     return head and head.Position or nil
 end
 
--- ===== AIMBOT (С WALLCHECK И ПЛАВНОСТЬЮ) =====
+-- ===== AIMBOT (ИДЕАЛЬНЫЙ - БЕЗ ОТСТАВАНИЯ) =====
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = Settings.AimbotFOV
     local mousePos = UserInputService:GetMouseLocation()
     
+    -- Сначала проверяем прошлую цель
+    if lastTarget and lastTarget.Character and lastTarget.Character:FindFirstChild("Head") then
+        local headPos = GetHeadPosition(lastTarget.Character)
+        if headPos then
+            local pos, onScreen = Camera:WorldToViewportPoint(headPos)
+            if onScreen and pos.Z > 0 then
+                local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                if dist < Settings.AimbotFOV then
+                    if Settings.AimbotWallCheck then
+                        if IsPlayerVisible(lastTarget.Character) then
+                            return lastTarget
+                        end
+                    else
+                        return lastTarget
+                    end
+                end
+            end
+        end
+    end
+    
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local char = player.Character
             
-            -- WALLCHECK ДЛЯ АИМБОТА
             if Settings.AimbotWallCheck and not IsPlayerVisible(char) then
                 continue
             end
@@ -74,10 +94,15 @@ local function GetClosestPlayer()
             end
         end
     end
+    
+    if closest then
+        lastTarget = closest
+    end
+    
     return closest
 end
 
--- ===== TRIGGERBOT (ТОЛЬКО ПО ВИДИМЫМ) =====
+-- ===== TRIGGERBOT =====
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     local head = target.Character:FindFirstChild("Head")
@@ -114,7 +139,7 @@ end)
 UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then
         isAimbotKeyPressed = false
-        currentTarget = nil
+        lastTarget = nil
     end
 end)
 
@@ -166,7 +191,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- AIMBOT (ПЛАВНЫЙ)
+    -- ===== ИДЕАЛЬНЫЙ AIMBOT (БЕЗ ОТСТАВАНИЯ) =====
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         if target then
@@ -178,9 +203,10 @@ RunService.RenderStepped:Connect(function()
                 local deltaX = screenPos.X - mousePos.X
                 local deltaY = screenPos.Y - mousePos.Y
                 
-                if math.abs(deltaX) > 1 or math.abs(deltaY) > 1 then
+                -- БЕЗ ОТСТАВАНИЯ - корректировка каждые 0.5 пикселя
+                if math.abs(deltaX) > 0.5 or math.abs(deltaY) > 0.5 then
                     pcall(function()
-                        -- ПЛАВНОЕ НАВЕДЕНИЕ
+                        -- Очень быстрое наведение с минимальным сглаживанием
                         mousemoverel(deltaX / Settings.AimbotSmooth, deltaY / Settings.AimbotSmooth)
                     end)
                 end
@@ -192,11 +218,10 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Sniper Arena",
-        Text = "E - Aimbot (Smooth) | WallCheck ON",
+        Text = "E - PERFECT AIM (no lag) | WallCheck ON",
         Duration = 3
     })
 end)
 
 print("=== Sniper Arena Script by wizzey loaded ===")
-print("E - hold for aimbot (SMOOTH)")
-print("WallCheck: ON")
+print("E - PERFECT AIMBOT (НЕ ОТСТАЕТ)")
