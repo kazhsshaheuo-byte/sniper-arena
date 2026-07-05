@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (FULL WORKING)
+-- Sniper Arena Script by wizzey (ВСЁ РАБОТАЕТ)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -111,7 +111,7 @@ RunService.RenderStepped:Connect(function()
     fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     table.insert(Drawings, fovCircle)
     
-    -- ESP (ВСЕГДА ЧЕРЕЗ СТЕНЫ)
+    -- ESP через стены
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local character = player.Character
