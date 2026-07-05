@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (FINAL FIX)
+-- Sniper Arena Script by wizzey (PERFECT AIM + TRIGGER)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,18 +8,15 @@ local Mouse = LocalPlayer:GetMouse()
 
 -- ===== НАСТРОЙКИ =====
 local Settings = {
-    -- AIMBOT
     Aimbot = true,
     AimbotFOV = 300,
     AimbotKey = Enum.KeyCode.E,
     AimbotSmooth = 1,
     
-    -- TRIGGER
     TriggerBot = true,
     TriggerPrecision = 15,
     TriggerDelay = 0.05,
     
-    -- ESP
     ESP_Box = true,
 }
 
@@ -43,7 +40,6 @@ local function IsPlayerVisible(char)
     return result.Instance and result.Instance:IsDescendantOf(char)
 end
 
--- ===== ПОЛУЧЕНИЕ ПОЗИЦИИ ГОЛОВЫ =====
 local function GetHeadPosition(char)
     local head = char:FindFirstChild("Head")
     return head and head.Position or nil
@@ -75,13 +71,13 @@ local function GetClosestPlayer()
     return closest
 end
 
--- ===== TRIGGERBOT (СТРЕЛЯЕТ ТОЛЬКО ПО ВИДИМЫМ) =====
+-- ===== TRIGGERBOT (ТОЛЬКО ПО ВИДИМЫМ) =====
 local function IsAimingAtHead(target)
     if not target or not target.Character then return false end
     local head = target.Character:FindFirstChild("Head")
     if not head then return false end
     
-    -- WALL CHECK ДЛЯ ТРИГГЕРА - СТРЕЛЯЕТ ТОЛЬКО ПО ВИДИМЫМ
+    -- WallCheck для триггера
     if not IsPlayerVisible(target.Character) then
         return false
     end
@@ -119,13 +115,13 @@ end)
 
 -- ===== ОСНОВНОЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
-    -- Очистка старых рисунков
+    -- Очистка
     for _, drawing in pairs(Drawings) do
         pcall(function() drawing:Remove() end)
     end
     Drawings = {}
     
-    -- FOV круг (300)
+    -- FOV
     local fovCircle = Drawing.new("Circle")
     fovCircle.Visible = true
     fovCircle.Radius = Settings.AimbotFOV
@@ -135,7 +131,7 @@ RunService.RenderStepped:Connect(function()
     fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     table.insert(Drawings, fovCircle)
     
-    -- ===== ESP (ВСЕГДА ЧЕРЕЗ СТЕНЫ) =====
+    -- ESP (через стены)
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local char = player.Character
@@ -158,7 +154,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== TRIGGERBOT (ТОЛЬКО ПО ВИДИМЫМ) =====
+    -- TRIGGERBOT
     if Settings.TriggerBot and canShoot then
         local target = GetClosestPlayer()
         if target and IsAimingAtHead(target) then
@@ -166,7 +162,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ===== AIMBOT (ВИДИТ ЧЕРЕЗ СТЕНЫ) =====
+    -- AIMBOT
     if Settings.Aimbot and isAimbotKeyPressed then
         local target = GetClosestPlayer()
         if target then
@@ -192,7 +188,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ===== УВЕДОМЛЕНИЕ =====
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Sniper Arena",
@@ -203,5 +198,5 @@ end)
 
 print("=== Sniper Arena Script by wizzey loaded ===")
 print("E - hold for aimbot")
-print("ESP through walls: ON")
 print("TriggerBot: ONLY visible targets")
+print("ESP through walls: ON")
