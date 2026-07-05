@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (FIXED VERSION)
+-- Sniper Arena Script by wizzey (FIXED CAMERA SHAKE + DEAD HITBOX)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,8 +8,6 @@ local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
 local ScriptActive = true
-local LastTarget = nil
-local LastTargetTime = 0
 
 local TopGui = nil
 if gethui then
@@ -25,7 +23,7 @@ local Settings = {
     Aimbot = true,
     AimbotFOV = 250, 
     AimbotKey = Enum.KeyCode.E, 
-    AimbotSmooth = 8,
+    AimbotSmooth = 5,
     TriggerBot = true,
     ESP_Box = true,
     ShowFOV = true,
@@ -36,7 +34,6 @@ local Settings = {
 local isActivationKeyPressed = false
 local Connections = {} 
 local triggerCooldown = false
-local aimbotActive = false
 
 -- ===== КРУГ FOV =====
 local FOVCircle = Drawing.new("Circle")
@@ -49,12 +46,17 @@ FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/
 
 local function IsPlayerVisible(char)
     if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
-    if not char:FindFirstChild("Head") then return false end
+    local origin = Camera.CFrame.Position
+    local targetPos = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
+    local dir = (targetPos - origin).Unit * (targetPos - origin).Magnitude
+    local params = RaycastParams.new()
     
-    local head = char.Head
-    local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {LocalPlayer.Character, char, Camera}
     
-    return onScreen and screenPos.Z > 0
+    local result = workspace:Raycast(origin, dir, params)
+    if not result then return true end
+    return result.Instance and result.Instance:IsDescendantOf(char)
 end
 
 local function GetClosestPlayer()
@@ -62,23 +64,13 @@ local function GetClosestPlayer()
     local closestDist = Settings.AimbotFOV
     local mousePos = UserInputService:GetMouseLocation()
     
-    if LastTarget and LastTarget.Character and LastTarget.Character:FindFirstChild("HumanoidRootPart") then
-        if IsPlayerVisible(LastTarget.Character) and (tick() - LastTargetTime) < 0.5 then
-            local realHeadPos = LastTarget.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
-            local pos, onScreen = Camera:WorldToViewportPoint(realHeadPos)
-            
-            if onScreen and pos.Z > 0 then
-                local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                if dist < Settings.AimbotFOV * 1.2 then
-                    return LastTarget
-                end
-            end
-        end
-    end
-    
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local char = player.Character
+            -- Пропускаем мёртвых
+            local humanoid = char:FindFirstChild("Humanoid")
+            if humanoid and humanoid.Health <= 0 then continue end
+            
             if IsPlayerVisible(char) then
                 local realHeadPos = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
                 local pos, onScreen = Camera:WorldToViewportPoint(realHeadPos)
@@ -93,32 +85,32 @@ local function GetClosestPlayer()
             end
         end
     end
-    
-    if closest then
-        LastTarget = closest
-        LastTargetTime = tick()
-    end
-    
     return closest
+end
+
+-- ===== МГНОВЕННЫЙ ВЫСТРЕЛ (твой оригинал) =====
+local function InstantShoot()
+    if triggerCooldown then return end
+    triggerCooldown = true
+    
+    pcall(function()
+        mouse1click()
+    end)
+    
+    task.wait(0.015)
+    triggerCooldown = false
 end
 
 table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    if input.KeyCode == Settings.AimbotKey then 
-        isActivationKeyPressed = true
-        aimbotActive = true
-    end
+    if input.KeyCode == Settings.AimbotKey then isActivationKeyPressed = true end
 end))
 
 table.insert(Connections, UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Settings.AimbotKey then 
-        isActivationKeyPressed = false
-        aimbotActive = false
-        LastTarget = nil
-    end
+    if input.KeyCode == Settings.AimbotKey then isActivationKeyPressed = false end
 end))
 
--- ===== GUI =====
+-- ===== GUI (абсолютно твой) =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "SniperArenaUI_DarkNeon"
 ScreenGui.ResetOnSpawn = false
@@ -478,47 +470,10 @@ CreateToggle(Pages["Триггер"], "Включить Триггербот", S
 CreateToggle(Pages["Misc"], "Включить расширение голов", Settings.ExpandHeads, function(v) Settings.ExpandHeads = v end)
 CreateSlider(Pages["Misc"], "Размер хитбокса головы", 1, 15, Settings.HeadSize, function(v) Settings.HeadSize = v end)
 
--- ===== ОЧИСТКА ПРИ СМЕРТИ =====
-local function CleanupDeadPlayer(player)
-    if player.Character then
-        local head = player.Character:FindFirstChild("Head")
-        if head and head:IsA("BasePart") then
-            head.Size = Vector3.new(1.2, 1.2, 1.2)
-            head.Transparency = 0
-            head.CanCollide = true
-            head.Massless = false
-        end
-        local esp = player.Character:FindFirstChild("PoloESP")
-        if esp then esp:Destroy() end
-    end
-end
-
-for _, player in pairs(Players:GetPlayers()) do
-    if player ~= LocalPlayer then
-        if player.Character then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            if humanoid then
-                humanoid.Died:Connect(function()
-                    CleanupDeadPlayer(player)
-                end)
-            end
-        end
-        player.CharacterAdded:Connect(function(char)
-            local humanoid = char:WaitForChild("Humanoid")
-            humanoid.Died:Connect(function()
-                CleanupDeadPlayer(player)
-            end)
-        end)
-    end
-end
-
-Players.PlayerRemoving:Connect(function(player)
-    CleanupDeadPlayer(player)
-end)
-
+-- ===== ФУНКЦИЯ ВЫГРУЗКИ (восстанавливаем камеру) =====
 local function UnloadScript()
-    ScriptActive = false
-    aimbotActive = false
+    ScriptActive = false 
+    Camera.CameraType = Enum.CameraType.Custom  -- Возвращаем обычную камеру
     for _, connection in pairs(Connections) do
         if connection then connection:Disconnect() end
     end
@@ -527,7 +482,15 @@ local function UnloadScript()
         FOVCircle:Remove()
     end
     for _, player in pairs(Players:GetPlayers()) do
-        CleanupDeadPlayer(player)
+        if player.Character then
+            local head = player.Character:FindFirstChild("Head")
+            if head and head:IsA("BasePart") then
+                head.Size = Vector3.new(1.2, 1.2, 1.2)
+                head.Transparency = 0
+            end
+            local esp = player.Character:FindFirstChild("PoloESP")
+            if esp then esp:Destroy() end
+        end
     end
     if ScreenGui then ScreenGui:Destroy() end
 end
@@ -542,20 +505,8 @@ table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gp
     end
 end))
 
--- ===== ПЛАВНЫЙ АИМБОТ =====
-local function SmoothAim(targetPos, smoothness)
-    if not aimbotActive then return end
-    
-    local currentCF = Camera.CFrame
-    local targetDirection = (targetPos - currentCF.Position).Unit
-    local targetCF = CFrame.new(currentCF.Position, currentCF.Position + targetDirection)
-    local alpha = math.clamp(1 / smoothness, 0.05, 0.5)
-    
-    Camera.CFrame = currentCF:Lerp(targetCF, alpha)
-end
-
--- ===== ОСНОВНОЙ ЦИКЛ =====
-RunService.RenderStepped:Connect(function(deltaTime)
+-- ===== ОСНОВНОЙ ЦИКЛ (с фиксом камеры) =====
+RunService.RenderStepped:Connect(function()
     if not ScriptActive then return end 
     
     if FOVCircle then
@@ -563,14 +514,16 @@ RunService.RenderStepped:Connect(function(deltaTime)
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     end
     
+    -- Обработка игроков (ESP и хитбоксы)
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
             local char = player.Character
             local head = char:FindFirstChild("Head")
             local humanoid = char:FindFirstChild("Humanoid")
             
-            if humanoid and humanoid.Health > 0 then
-                if head and head:IsA("BasePart") then
+            if head and head:IsA("BasePart") then
+                -- Меняем хитбокс только если игрок жив
+                if humanoid and humanoid.Health > 0 then
                     if Settings.ExpandHeads and Settings.HeadSize > 1 then
                         head.Size = Vector3.new(Settings.HeadSize, Settings.HeadSize, Settings.HeadSize)
                         head.Transparency = 0.7 
@@ -579,12 +532,19 @@ RunService.RenderStepped:Connect(function(deltaTime)
                     else
                         head.Size = Vector3.new(1.2, 1.2, 1.2)
                         head.Transparency = 0
+                        head.CanCollide = true
+                        head.Massless = false
                     end
+                else
+                    -- Вернуть стандартный размер, если мёртв
+                    head.Size = Vector3.new(1.2, 1.2, 1.2)
+                    head.Transparency = 0
+                    head.CanCollide = true
+                    head.Massless = false
                 end
-            else
-                CleanupDeadPlayer(player)
             end
             
+            -- ESP только для живых
             if Settings.ESP_Box and humanoid and humanoid.Health > 0 then
                 local highlight = char:FindFirstChild("PoloESP")
                 if not highlight then
@@ -603,46 +563,53 @@ RunService.RenderStepped:Connect(function(deltaTime)
         end
     end
     
-    -- ТРИГГЕРБОТ
+    -- ===== ТРИГГЕРБОТ (твой оригинал) =====
     if Settings.TriggerBot and isActivationKeyPressed and not triggerCooldown then
         local target = GetClosestPlayer()
         
-        if target and target.Character then
-            local humanoid = target.Character:FindFirstChild("Humanoid")
-            if humanoid and humanoid.Health > 0 then
-                local headPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
-                local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            local headPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
+            local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
+            
+            if onScreen then
+                local mousePos = UserInputService:GetMouseLocation()
+                local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
                 
-                if onScreen then
-                    local mousePos = UserInputService:GetMouseLocation()
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    
-                    if dist < Settings.AimbotFOV * 0.8 then
-                        triggerCooldown = true
-                        pcall(function()
-                            mouse1click()
-                        end)
-                        task.wait(0.05)
-                        triggerCooldown = false
-                    end
+                if dist < Settings.AimbotFOV then
+                    triggerCooldown = true
+                    pcall(function()
+                        mouse1click()
+                    end)
+                    task.wait(0.01)
+                    triggerCooldown = false
                 end
             end
         end
     end
     
-    -- АИМБОТ
-    if Settings.Aimbot and aimbotActive then
+    -- ===== ПЛАВНЫЙ АИМБОТ (твой оригинал) =====
+    if Settings.Aimbot and isActivationKeyPressed then
+        -- ВКЛЮЧАЕМ Scriptable, чтобы камера не дёргалась от мыши
+        if Camera.CameraType ~= Enum.CameraType.Scriptable then
+            Camera.CameraType = Enum.CameraType.Scriptable
+        end
+        
         local target = GetClosestPlayer()
-        if target and target.Character then
-            local humanoid = target.Character:FindFirstChild("Humanoid")
-            if humanoid and humanoid.Health > 0 then
-                local exactHeadPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
-                local dynamicSmooth = Settings.AimbotSmooth * (1 / math.max(deltaTime, 0.016))
-                SmoothAim(exactHeadPos, dynamicSmooth)
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            local exactHeadPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
+            local targetCF = CFrame.new(Camera.CFrame.Position, exactHeadPos)
+            
+            local smooth = Settings.AimbotSmooth
+            if smooth <= 1 then
+                Camera.CFrame = targetCF
             else
-                aimbotActive = false
-                LastTarget = nil
+                Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / smooth)
             end
+        end
+    else
+        -- Если аимбот выключен или клавиша отпущена, возвращаем обычную камеру
+        if Camera.CameraType == Enum.CameraType.Scriptable then
+            Camera.CameraType = Enum.CameraType.Custom
         end
     end
 end)
