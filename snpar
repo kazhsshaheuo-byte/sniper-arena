@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (INSTANT & LEGIT HITBOX UPDATE 2026)
+-- Sniper Arena Script by wizzey (PREMIUM DARK NEON EDITION 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -28,14 +28,13 @@ local Settings = {
 }
 
 local isKeyPressed = false
-local canShoot = true
 
 -- ===== КРУГ FOV =====
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = Settings.ShowFOV
 FOVCircle.Radius = Settings.AimbotFOV
-FOVCircle.Thickness = 1
-FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Thickness = 1.5
+FOVCircle.Color = Color3.fromRGB(0, 255, 204) -- Свежий бирюзовый неон
 FOVCircle.Filled = false
 FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
@@ -81,7 +80,7 @@ local function GetClosestPlayer()
     return closest
 end
 
--- МОМЕНТАЛЬНЫЙ ВЫСТРЕЛ (БЕЗ ЗАДЕРЖЕК)
+-- МОМЕНТАЛЬНЫЙ ВЫСТРЕЛ
 local function InstantShoot()
     if mouse1click then 
         pcall(mouse1click) 
@@ -100,61 +99,87 @@ UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then isKeyPressed = false end
 end)
 
--- ===== СОЗДАНИЕ PREMIUM GUI =====
+-- ===== СОЗДАНИЕ ВЕЛИКОЛЕПНОЙ PREMIUM GUI =====
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SniperArenaUI_v4"
+ScreenGui.Name = "SniperArenaUI_PremiumNeon"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 999999
 ScreenGui.IgnoreGuiInset = true    
 ScreenGui.Parent = TopGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 480, 0, 340)
-MainFrame.Position = UDim2.new(0.5, -240, 0.5, -170)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+MainFrame.Size = UDim2.new(0, 520, 0, 360)
+MainFrame.Position = UDim2.new(0.5, -260, 0.5, -180)
+MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 13) -- Глубокий футуристичный темный
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.CornerRadius = UDim.new(0, 16)
 MainCorner.Parent = MainFrame
 
+-- Неоновая окантовка (Glow Effect)
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Thickness = 1.5
+MainStroke.Color = Color3.fromRGB(0, 255, 204)
+MainStroke.Transparency = 0.65
+MainStroke.Parent = MainFrame
+
 local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1, 0, 0, 45)
-TitleBar.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+TitleBar.Size = UDim2.new(1, 0, 0, 50)
+TitleBar.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 16)
+TitleCorner.Parent = TitleBar
+
+-- Фикс скруглений верхней панели
+local TitleFix = Instance.new("Frame")
+TitleFix.Size = UDim2.new(1, 0, 0, 20)
+TitleFix.Position = UDim2.new(0, 0, 1, -20)
+TitleFix.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+TitleFix.BorderSizePixel = 0
+TitleFix.Parent = TitleBar
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 1, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "   sniper-arena <font color='#ffffff'>by wizzey</font>"
+Title.Text = "   WIZZEY_WARE <font color='#00ffcc'>// sniper arena</font>"
 Title.RichText = true
-Title.TextColor3 = Color3.fromRGB(150, 150, 155)
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 14
+Title.TextSize = 15
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TitleBar
 
 local TabContainer = Instance.new("Frame")
-TabContainer.Position = UDim2.new(0, 12, 0, 58)
-TabContainer.Size = UDim2.new(0, 120, 1, -70)
+TabContainer.Position = UDim2.new(0, 14, 0, 65)
+TabContainer.Size = UDim2.new(0, 130, 1, -80)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Parent = MainFrame
 
 local TabLayout = Instance.new("UIListLayout")
-TabLayout.Padding = UDim.new(0, 6)
+TabLayout.Padding = UDim.new(0, 8)
 TabLayout.Parent = TabContainer
 
 local ContentContainer = Instance.new("Frame")
-ContentContainer.Position = UDim2.new(0, 145, 0, 58)
-ContentContainer.Size = UDim2.new(1, -157, 1, -70)
-ContentContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+ContentContainer.Position = UDim2.new(0, 160, 0, 65)
+ContentContainer.Size = UDim2.new(1, -174, 1, -80)
+ContentContainer.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+ContentContainer.BorderSizePixel = 0
 ContentContainer.Parent = MainFrame
 
 local ContentCorner = Instance.new("UICorner")
-ContentCorner.CornerRadius = UDim.new(0, 10)
+ContentCorner.CornerRadius = UDim.new(0, 12)
 ContentCorner.Parent = ContentContainer
+
+local ContentStroke = Instance.new("UIStroke")
+ContentStroke.Thickness = 1
+ContentStroke.Color = Color3.fromRGB(30, 30, 35)
+ContentStroke.Parent = ContentContainer
 
 local Pages = {}
 local Tabs = {
@@ -166,8 +191,8 @@ local Tabs = {
 
 local function CreatePage(name)
     local Page = Instance.new("ScrollingFrame")
-    Page.Size = UDim2.new(1, -16, 1, -16)
-    Page.Position = UDim2.new(0, 8, 0, 8)
+    Page.Size = UDim2.new(1, -20, 1, -20)
+    Page.Position = UDim2.new(0, 10, 0, 10)
     Page.BackgroundTransparency = 1
     Page.Visible = false
     Page.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -187,69 +212,127 @@ Pages["Аим"].Visible = true
 local currentActiveButton = nil
 local function SwitchTab(tabName, button)
     for name, page in pairs(Pages) do page.Visible = (name == tabName) end
-    if currentActiveButton then currentActiveButton.BackgroundColor3 = Color3.fromRGB(22, 22, 26) end
+    if currentActiveButton then 
+        TweenService:Create(currentActiveButton, TweenInfo.new(0.25), {
+            BackgroundColor3 = Color3.fromRGB(16, 16, 22),
+            TextColor3 = Color3.fromRGB(150, 150, 155)
+        }):Play()
+        currentActiveButton:FindFirstChildOfClass("UIStroke").Color = Color3.fromRGB(30, 30, 35)
+    end
     currentActiveButton = button
-    button.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+    TweenService:Create(button, TweenInfo.new(0.25), {
+        BackgroundColor3 = Color3.fromRGB(22, 35, 35),
+        TextColor3 = Color3.fromRGB(0, 255, 204)
+    }):Play()
+    button:FindFirstChildOfClass("UIStroke").Color = Color3.fromRGB(0, 255, 204)
 end
 
 local function CreateToggle(parent, text, default, callback)
     local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 38)
-    Frame.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
+    Frame.Size = UDim2.new(1, 0, 0, 42)
+    Frame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
     Frame.Parent = parent
     
+    local FCorn = Instance.new("UICorner")
+    FCorn.CornerRadius = UDim.new(0, 8)
+    FCorn.Parent = Frame
+    
+    local FStroke = Instance.new("UIStroke")
+    FStroke.Thickness = 1
+    FStroke.Color = Color3.fromRGB(30, 30, 35)
+    FStroke.Parent = Frame
+
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(0.7, 0, 1, 0)
-    Label.Text = "   " .. text
-    Label.TextColor3 = Color3.fromRGB(210, 210, 215)
+    Label.Text = "    " .. text
+    Label.TextColor3 = Color3.fromRGB(230, 230, 235)
     Label.Font = Enum.Font.GothamMedium
-    Label.TextSize = 12
+    Label.TextSize = 13
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.BackgroundTransparency = 1
     Label.Parent = Frame
     
     local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(0, 42, 0, 20)
-    Button.Position = UDim2.new(1, -50, 0.5, -10)
-    Button.BackgroundColor3 = default and Color3.fromRGB(100, 100, 110) or Color3.fromRGB(45, 45, 50)
+    Button.Size = UDim2.new(0, 46, 0, 22)
+    Button.Position = UDim2.new(1, -56, 0.5, -11)
+    Button.BackgroundColor3 = default and Color3.fromRGB(0, 255, 204) or Color3.fromRGB(35, 35, 40)
     Button.Text = ""
     Button.Parent = Frame
+    
+    local BCorn = Instance.new("UICorner")
+    BCorn.CornerRadius = UDim.new(1, 0)
+    BCorn.Parent = Button
+    
+    local CircleIndicator = Instance.new("Frame")
+    CircleIndicator.Size = UDim2.new(0, 16, 0, 16)
+    CircleIndicator.Position = default and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+    CircleIndicator.BackgroundColor3 = default and Color3.fromRGB(10, 10, 15) or Color3.fromRGB(200, 200, 205)
+    CircleIndicator.Parent = Button
+    
+    local CCorn = Instance.new("UICorner")
+    CCorn.CornerRadius = UDim.new(1, 0)
+    CCorn.Parent = CircleIndicator
     
     local state = default
     Button.MouseButton1Click:Connect(function()
         state = not state
-        Button.BackgroundColor3 = state and Color3.fromRGB(100, 100, 110) or Color3.fromRGB(45, 45, 50)
+        TweenService:Create(Button, TweenInfo.new(0.2), {
+            BackgroundColor3 = state and Color3.fromRGB(0, 255, 204) or Color3.fromRGB(35, 35, 40)
+        }):Play()
+        TweenService:Create(CircleIndicator, TweenInfo.new(0.2), {
+            Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
+            BackgroundColor3 = state and Color3.fromRGB(10, 10, 15) or Color3.fromRGB(200, 200, 205)
+        }):Play()
         callback(state)
     end)
 end
 
 local function CreateSlider(parent, text, min, max, default, callback)
     local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 52)
-    Frame.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
+    Frame.Size = UDim2.new(1, 0, 0, 56)
+    Frame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
     Frame.Parent = parent
     
+    local FCorn = Instance.new("UICorner")
+    FCorn.CornerRadius = UDim.new(0, 8)
+    FCorn.Parent = Frame
+    
+    local FStroke = Instance.new("UIStroke")
+    FStroke.Thickness = 1
+    FStroke.Color = Color3.fromRGB(30, 30, 35)
+    FStroke.Parent = Frame
+
     local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, 0, 0, 24)
-    Label.Text = "   " .. text .. ": " .. tostring(default)
-    Label.TextColor3 = Color3.fromRGB(180, 180, 185)
+    Label.Size = UDim2.new(1, 0, 0, 28)
+    Label.Text = "    " .. text .. ": <font color='#00ffcc'>" .. tostring(default) .. "</font>"
+    Label.RichText = true
+    Label.TextColor3 = Color3.fromRGB(190, 190, 195)
     Label.Font = Enum.Font.GothamMedium
-    Label.TextSize = 12
+    Label.TextSize = 13
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.BackgroundTransparency = 1
     Label.Parent = Frame
     
     local SliderBG = Instance.new("TextButton")
-    SliderBG.Size = UDim2.new(1, -26, 0, 5)
-    SliderBG.Position = UDim2.new(0, 13, 0, 34)
-    SliderBG.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+    SliderBG.Size = UDim2.new(1, -32, 0, 6)
+    SliderBG.Position = UDim2.new(0, 16, 0, 36)
+    SliderBG.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
     SliderBG.Text = ""
     SliderBG.Parent = Frame
     
+    local SBGCorn = Instance.new("UICorner")
+    SBGCorn.CornerRadius = UDim.new(1, 0)
+    SBGCorn.Parent = SliderBG
+    
     local SliderFill = Instance.new("Frame")
     SliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    SliderFill.BackgroundColor3 = Color3.fromRGB(130, 130, 135)
+    SliderFill.BackgroundColor3 = Color3.fromRGB(0, 255, 204)
+    SliderFill.BorderSizePixel = 0
     SliderFill.Parent = SliderBG
+    
+    local SFCorn = Instance.new("UICorner")
+    SFCorn.CornerRadius = UDim.new(1, 0)
+    SFCorn.Parent = SliderFill
     
     local IsDragging = false
     local function UpdateSlider()
@@ -258,7 +341,7 @@ local function CreateSlider(parent, text, min, max, default, callback)
         local Percentage = math.clamp(RelativeX / SliderBG.AbsoluteSize.X, 0, 1)
         SliderFill.Size = UDim2.new(Percentage, 0, 1, 0)
         local Value = math.floor(min + (Percentage * (max - min)))
-        Label.Text = "   " .. text .. ": " .. tostring(Value)
+        Label.Text = "    " .. text .. ": <font color='#00ffcc'>" .. tostring(Value) .. "</font>"
         callback(Value)
     end
     
@@ -269,18 +352,29 @@ end
 
 for i, tabData in ipairs(Tabs) do
     local TBtn = Instance.new("TextButton")
-    TBtn.Size = UDim2.new(1, 0, 0, 36)
-    TBtn.BackgroundColor3 = (i == 1) and Color3.fromRGB(45, 45, 52) or Color3.fromRGB(22, 22, 26)
+    TBtn.Size = UDim2.new(1, 0, 0, 40)
+    TBtn.BackgroundColor3 = (i == 1) and Color3.fromRGB(22, 35, 35) or Color3.fromRGB(16, 16, 22)
     TBtn.Text = "  " .. tabData.Icon .. "  " .. tabData.Name
-    TBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TBtn.Font = Enum.Font.GothamMedium
-    TBtn.TextSize = 12
+    TBtn.TextColor3 = (i == 1) and Color3.fromRGB(0, 255, 204) or Color3.fromRGB(150, 150, 155)
+    TBtn.Font = Enum.Font.GothamBold
+    TBtn.TextSize = 13
     TBtn.TextXAlignment = Enum.TextXAlignment.Left
     TBtn.Parent = TabContainer
+    
+    local BCorn = Instance.new("UICorner")
+    BCorn.CornerRadius = UDim.new(0, 8)
+    BCorn.Parent = TBtn
+    
+    local BStroke = Instance.new("UIStroke")
+    BStroke.Thickness = 1
+    BStroke.Color = (i == 1) and Color3.fromRGB(0, 255, 204) or Color3.fromRGB(30, 30, 35)
+    BStroke.Parent = TBtn
+    
     if i == 1 then currentActiveButton = TBtn end
     TBtn.MouseButton1Click:Connect(function() SwitchTab(tabData.Name, TBtn) end)
 end
 
+-- Распределяем настройки
 CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
 CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) 
 CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v) Settings.AimbotFOV = v; FOVCircle.Radius = v end)
@@ -289,11 +383,12 @@ CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Bo
 CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
 CreateSlider(Pages["Misc"], "Head Expander Size", 1, 15, Settings.HeadSize, function(v) Settings.HeadSize = v end)
 
+-- Переключение видимости меню
 UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then MainFrame.Visible = not MainFrame.Visible end
 end)
 
--- ===== ИДЕАЛЬНЫЙ СИНХРОННЫЙ ЦИКЛ ОБРАБОТКИ =====
+-- ===== ВЫСОКОТОЧНЫЙ СИНХРОННЫЙ ЦИКЛ =====
 RunService.RenderStepped:Connect(function()
     FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
@@ -304,7 +399,7 @@ RunService.RenderStepped:Connect(function()
             local head = char:FindFirstChild("Head")
             
             if head and head:IsA("BasePart") then
-                -- Постоянное принудительное расширение хитбокса
+                -- Постоянное force-расширение хитбокса
                 if Settings.HeadSize > 1 then
                     head.Size = Vector3.new(Settings.HeadSize, Settings.HeadSize, Settings.HeadSize)
                     head.Transparency = 0.7 
@@ -315,7 +410,7 @@ RunService.RenderStepped:Connect(function()
                     head.Transparency = 0
                 end
                 
-                -- Рендер ESP
+                -- Стильный неоновый ESP
                 if Settings.ESP_Box then
                     local highlight = char:FindFirstChild("PoloESP")
                     if not highlight then
@@ -323,9 +418,9 @@ RunService.RenderStepped:Connect(function()
                         highlight.Name = "PoloESP"
                         highlight.Parent = char
                     end
-                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                    highlight.FillColor = Color3.fromRGB(0, 255, 204)
                     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    highlight.FillTransparency = 0.4
+                    highlight.FillTransparency = 0.5
                     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
                 else
                     local h = char:FindFirstChild("PoloESP")
@@ -335,9 +430,8 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ЛОГИКА АИМА И ВЫСОКОТОЧНОГО ТРИГГЕРА
+    -- ЛОГИКА ТРИГГЕРА (СТРОГО НА НАСТОЯЩУЮ ГОЛОВУ)
     if Settings.TriggerBot then
-        -- Высокоточный Raycast-прострел из центра экрана строго по РЕАЛЬНОМУ хитбоксу
         local ray = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
         local params = RaycastParams.new()
         params.FilterType = Enum.RaycastFilterType.Exclude
@@ -349,15 +443,13 @@ RunService.RenderStepped:Connect(function()
             local model = hitPart:FindFirstAncestorOfClass("Model")
             
             if model and Players:GetPlayerFromCharacter(model) and Players:GetPlayerFromCharacter(model) ~= LocalPlayer then
-                -- Если луч попал в голову (или расширенную голову, но мы проверяем дистанцию до реального центра шеи)
                 if hitPart.Name == "Head" then
                     local hrp = model:FindFirstChild("HumanoidRootPart")
                     if hrp then
-                        -- Проверяем, находится ли луч в пределах оригинального радиуса головы (1.2-1.5 студа) от центра шеи
                         local realHeadCenter = hrp.Position + Vector3.new(0, 1.6, 0)
                         local distanceToTrueHead = (result.Position - realHeadCenter).Magnitude
                         
-                        if distanceToTrueHead <= 1.5 then -- Срабатывает только на реальный размер головы!
+                        if distanceToTrueHead <= 1.5 then -- Стреляем только по реальным размерам центра шеи!
                             InstantShoot()
                         end
                     end
@@ -366,13 +458,13 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
+    -- БЕЗУПРЕЧНЫЙ АИМБОТ С ПРЯМОЙ ФИКСАЦИЕЙ CFRAME
     if isKeyPressed and Settings.Aimbot then
         local target = GetClosestPlayer()
         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            -- Математически чистая позиция реальной головы
             local exactHeadPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
             
-            -- Мертвая фиксация камеры БЕЗ конфликтующих смещений мыши
+            -- Идеальное наведение без тряски мыши
             Camera.CFrame = CFrame.new(Camera.CFrame.Position, exactHeadPos)
         end
     end
