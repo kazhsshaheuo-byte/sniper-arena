@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (100% ACCURATE TRIGGER & KEYBIND UPDATE 2026)
+-- Sniper Arena Script by wizzey (PREMIUM ANIMATED & FIXED TRIGGER 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -21,15 +21,15 @@ end
 local Settings = {
     Aimbot = true,
     AimbotFOV = 250, 
-    AimbotKey = Enum.KeyCode.E, -- Единая клавиша для Аима и Триггера
+    AimbotKey = Enum.KeyCode.E,
     TriggerBot = true,
     ESP_Box = true,
     ShowFOV = true,
+    ExpandHeads = false, -- По дефолту ВЫКЛЮЧЕНО
     HeadSize = 6,
 }
 
 local isActivationKeyPressed = false
-local lastShot = 0
 
 -- ===== КРУГ FOV =====
 local FOVCircle = Drawing.new("Circle")
@@ -56,7 +56,7 @@ local function IsPlayerVisible(char)
     return result.Instance and result.Instance:IsDescendantOf(char)
 end
 
--- Поиск цели для Аимбота
+-- Поиск цели для Аима
 local function GetClosestPlayer()
     local closest = nil
     local closestDist = Settings.AimbotFOV
@@ -82,7 +82,7 @@ local function GetClosestPlayer()
     return closest
 end
 
--- МОМЕНТАЛЬНЫЙ ОФИЦИАЛЬНЫЙ ВЫСТРЕЛ БЕЗ ЗАДЕРЖЕК
+-- Мгновенная симуляция выстрела
 local function InstantShoot()
     local x, y = Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2
     VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
@@ -92,20 +92,16 @@ end
 -- Отслеживание нажатия клавиши активации (E)
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    if input.KeyCode == Settings.AimbotKey then 
-        isActivationKeyPressed = true 
-    end
+    if input.KeyCode == Settings.AimbotKey then isActivationKeyPressed = true end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Settings.AimbotKey then 
-        isActivationKeyPressed = false 
-    end
+    if input.KeyCode == Settings.AimbotKey then isActivationKeyPressed = false end
 end)
 
--- ===== ВЕЛИКОЛЕПНАЯ PREMIUM GUI =====
+-- ===== СОЗДАНИЕ PREMIUM ЖИВОЙ GUI =====
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SniperArenaUI_PremiumNeon"
+ScreenGui.Name = "SniperArenaUI_PremiumAnimated"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 999999
 ScreenGui.IgnoreGuiInset = true    
@@ -116,7 +112,6 @@ MainFrame.Size = UDim2.new(0, 520, 0, 360)
 MainFrame.Position = UDim2.new(0.5, -260, 0.5, -180)
 MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 13)
 MainFrame.Active = true
-MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
@@ -128,6 +123,37 @@ MainStroke.Thickness = 1.5
 MainStroke.Color = Color3.fromRGB(0, 255, 204)
 MainStroke.Transparency = 0.65
 MainStroke.Parent = MainFrame
+
+-- ПЛАВНЫЙ СУПЕР-ДРАГГИНГ (Smooth Dragging)
+local dragging = false
+local dragInput, dragStart, startPos
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    TweenService:Create(MainFrame, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    }):Play()
+end
+
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+
+MainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then updateDrag(input) end
+end)
 
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 50)
@@ -149,7 +175,7 @@ TitleFix.Parent = TitleBar
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 1, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "   WIZZEY_WARE <font color='#00ffcc'>// sniper arena</font>"
+Title.Text = "   WIZZEY_WARE <font color='#00ffcc'>// premium active</font>"
 Title.RichText = true
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
@@ -192,13 +218,13 @@ local Tabs = {
 }
 
 local function CreatePage(name)
-    local Page = Instance.new("ScrollingFrame")
+    -- Используем CanvasGroup для идеальной плавной прозрачности при открытии
+    local Page = Instance.new("CanvasGroup")
     Page.Size = UDim2.new(1, -20, 1, -20)
     Page.Position = UDim2.new(0, 10, 0, 10)
     Page.BackgroundTransparency = 1
     Page.Visible = false
-    Page.CanvasSize = UDim2.new(0, 0, 0, 0)
-    Page.ScrollBarThickness = 0
+    Page.GroupTransparency = 1
     Page.Parent = ContentContainer
     
     local Layout = Instance.new("UIListLayout")
@@ -210,19 +236,35 @@ end
 
 for _, tabData in ipairs(Tabs) do CreatePage(tabData.Name) end
 Pages["Аим"].Visible = true
+Pages["Аим"].GroupTransparency = 0
 
 local currentActiveButton = nil
 local function SwitchTab(tabName, button)
-    for name, page in pairs(Pages) do page.Visible = (name == tabName) end
+    if currentActiveButton == button then return end
+    
+    -- Плавное исчезновение старой страницы
+    for name, page in pairs(Pages) do
+        if page.Visible and name ~= tabName then
+            TweenService:Create(page, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {GroupTransparency = 1}):Play()
+            task.delay(0.15, function() page.Visible = false end)
+        end
+    end
+    
+    -- Плавное появление новой страницы
+    local newPage = Pages[tabName]
+    newPage.Visible = true
+    TweenService:Create(newPage, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {GroupTransparency = 0}):Play()
+
     if currentActiveButton then 
-        TweenService:Create(currentActiveButton, TweenInfo.new(0.25), {
+        TweenService:Create(currentActiveButton, TweenInfo.new(0.2), {
             BackgroundColor3 = Color3.fromRGB(16, 16, 22),
             TextColor3 = Color3.fromRGB(150, 150, 155)
         }):Play()
         currentActiveButton:FindFirstChildOfClass("UIStroke").Color = Color3.fromRGB(30, 30, 35)
     end
+    
     currentActiveButton = button
-    TweenService:Create(button, TweenInfo.new(0.25), {
+    TweenService:Create(button, TweenInfo.new(0.2), {
         BackgroundColor3 = Color3.fromRGB(22, 35, 35),
         TextColor3 = Color3.fromRGB(0, 255, 204)
     }):Play()
@@ -278,10 +320,10 @@ local function CreateToggle(parent, text, default, callback)
     local state = default
     Button.MouseButton1Click:Connect(function()
         state = not state
-        TweenService:Create(Button, TweenInfo.new(0.2), {
+        TweenService:Create(Button, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {
             BackgroundColor3 = state and Color3.fromRGB(0, 255, 204) or Color3.fromRGB(35, 35, 40)
         }):Play()
-        TweenService:Create(CircleIndicator, TweenInfo.new(0.2), {
+        TweenService:Create(CircleIndicator, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
             Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
             BackgroundColor3 = state and Color3.fromRGB(10, 10, 15) or Color3.fromRGB(200, 200, 205)
         }):Play()
@@ -341,7 +383,9 @@ local function CreateSlider(parent, text, min, max, default, callback)
         local MousePos = UserInputService:GetMouseLocation()
         local RelativeX = MousePos.X - SliderBG.AbsolutePosition.X
         local Percentage = math.clamp(RelativeX / SliderBG.AbsoluteSize.X, 0, 1)
-        SliderFill.Size = UDim2.new(Percentage, 0, 1, 0)
+        
+        TweenService:Create(SliderFill, TweenInfo.new(0.08, Enum.EasingStyle.Quad), {Size = UDim2.new(Percentage, 0, 1, 0)}):Play()
+        
         local Value = math.floor(min + (Percentage * (max - min)))
         Label.Text = "    " .. text .. ": <font color='#00ffcc'>" .. tostring(Value) .. "</font>"
         callback(Value)
@@ -376,19 +420,32 @@ for i, tabData in ipairs(Tabs) do
     TBtn.MouseButton1Click:Connect(function() SwitchTab(tabData.Name, TBtn) end)
 end
 
+-- Распределение элементов
 CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
 CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) 
 CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v) Settings.AimbotFOV = v; FOVCircle.Radius = v end)
 
 CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
 CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
-CreateSlider(Pages["Misc"], "Head Expander Size", 1, 15, Settings.HeadSize, function(v) Settings.HeadSize = v end)
 
+-- ВКЛАДКА MISC (С ТУМБЛЕРОМ НА ХИТБОКСЫ)
+CreateToggle(Pages["Misc"], "Включить расширение голов", Settings.ExpandHeads, function(v) Settings.ExpandHeads = v end)
+CreateSlider(Pages["Misc"], "Размер хитбокса головы", 1, 15, Settings.HeadSize, function(v) Settings.HeadSize = v end)
+
+-- Переключение видимости меню на RightShift с эффектом затухания
+local menuVisible = true
 UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == Enum.KeyCode.RightShift then MainFrame.Visible = not MainFrame.Visible end
+    if not gpe and input.KeyCode == Enum.KeyCode.RightShift then 
+        menuVisible = not menuVisible
+        TweenService:Create(MainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+            Size = menuVisible and UDim2.new(0, 520, 0, 360) or UDim2.new(0, 520, 0, 0),
+            BackgroundTransparency = menuVisible and 0 or 1
+        }):Play()
+        MainFrame.ClipsDescendants = true
+    end
 end)
 
--- ===== ЦИКЛ ВЫЧИСЛЕНИЙ С ВЫСОКОЙ ТОЧНОСТЬЮ =====
+-- ===== ЕДИНЫЙ СИНХРОННЫЙ ПОТОК ДВИЖКА (RenderStepped) =====
 RunService.RenderStepped:Connect(function()
     FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
@@ -399,16 +456,18 @@ RunService.RenderStepped:Connect(function()
             local head = char:FindFirstChild("Head")
             
             if head and head:IsA("BasePart") then
-                if Settings.HeadSize > 1 then
+                -- Управление хитбоксом в зависимости от настроек
+                if Settings.ExpandHeads and Settings.HeadSize > 1 then
                     head.Size = Vector3.new(Settings.HeadSize, Settings.HeadSize, Settings.HeadSize)
                     head.Transparency = 0.7 
                     head.CanCollide = false
                     head.Massless = true
                 else
-                    head.Size = Vector3.new(1.2, 1.2, 1.2)
+                    head.Size = Vector3.new(1.2, 1.2, 1.2) -- Дефолт
                     head.Transparency = 0
                 end
                 
+                -- Стильный неоновый ESP
                 if Settings.ESP_Box then
                     local highlight = char:FindFirstChild("PoloESP")
                     if not highlight then
@@ -428,34 +487,31 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- СВЕРХТОЧНЫЙ ТРИГГЕРБОТ (ТОЛЬКО ПРИ ЗАЖАТОЙ "E")
+    -- НЕУБИВАЕМЫЙ МАТЕМАТИЧЕСКИЙ ТРИГГЕР (ЗАЖАТА "E")
     if Settings.TriggerBot and isActivationKeyPressed then
-        local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        local ray = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        local rayOrigin = ray.Origin
+        local rayDirection = ray.Direction.Unit
         
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 local char = player.Character
                 
-                -- Высчитываем строгие границы оригинальной головы (1.2 x 1.2 x 1.2) относительно центра шеи
-                local trueHeadCenter = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
+                -- Вычисляем точное 3D расположение центра реальной головы
+                local realHeadCenter = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
+                local playerVector = realHeadCenter - rayOrigin
+                local dotProduct = playerVector:Dot(rayDirection)
                 
-                -- Проекция 3D центра оригинальной головы на 2D экран
-                local headScreenPos, onScreen = Camera:WorldToViewportPoint(trueHeadCenter)
-                
-                if onScreen and headScreenPos.Z > 0 then
-                    -- Рассчитываем примерный радиус проекции оригинальной головы на экране в пикселях
-                    local edge3D = trueHeadCenter + Vector3.new(0.6, 0, 0)
-                    local edgeScreenPos = Camera:WorldToViewportPoint(edge3D)
-                    local trueHeadRadiusPixel = math.abs(headScreenPos.X - edgeScreenPos.X)
+                if dotProduct > 0 then
+                    local closestPointOnRay = rayOrigin + (rayDirection * dotProduct)
+                    -- Расстояние от луча нашего взгляда до центра оригинальной головы
+                    local distanceToTrueHead = (realHeadCenter - closestPointOnRay).Magnitude
                     
-                    -- Проверяем, находится ли центр экрана строго внутри проекции оригинальной головы противника
-                    local distanceToCrosshair = (Vector2.new(headScreenPos.X, headScreenPos.Y) - screenCenter).Magnitude
-                    
-                    if distanceToCrosshair <= trueHeadRadiusPixel then
-                        -- Финальная проверка на отсутствие текстур/стен между вами
+                    -- Проверяем попадание в реальные 1.2 студа хэдбокса
+                    if distanceToTrueHead <= 1.2 then
                         if IsPlayerVisible(char) then
                             InstantShoot()
-                            break
+                            break -- Один кадр — один выстрел по ближайшему
                         end
                     end
                 end
@@ -463,7 +519,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- СИНХРОННЫЙ АИМБОТ (РАБОТАЕТ НА ЗАЖАТУЮ "E")
+    -- АИМБОТ НА КОМПЛЕКСНУЮ ФИКСАЦИЮ СМЕЩЕНИЯ (ЗАЖАТА "E")
     if Settings.Aimbot and isActivationKeyPressed then
         local target = GetClosestPlayer()
         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
