@@ -1,4 +1,4 @@
--- Sniper Arena Script by wizzey (MISC UPDATE 2026)
+-- Sniper Arena Script by wizzey (INSTANT & LEGIT HITBOX UPDATE 2026)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -22,10 +22,9 @@ local Settings = {
     AimbotFOV = 250, 
     AimbotKey = Enum.KeyCode.E,
     TriggerBot = true,
-    TriggerPrecision = 35, 
     ESP_Box = true,
     ShowFOV = true,
-    HeadSize = 6, -- Изначальный размер расширителя
+    HeadSize = 6,
 }
 
 local isKeyPressed = false
@@ -44,7 +43,7 @@ FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/
 local function IsPlayerVisible(char)
     if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
     local origin = Camera.CFrame.Position
-    local targetPos = char.HumanoidRootPart.Position + Vector3.new(0, 1.5, 0)
+    local targetPos = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
     local dir = (targetPos - origin).Unit * (targetPos - origin).Magnitude
     local params = RaycastParams.new()
     
@@ -66,7 +65,7 @@ local function GetClosestPlayer()
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local char = player.Character
             if IsPlayerVisible(char) then
-                local realHeadPos = char.HumanoidRootPart.Position + Vector3.new(0, 1.5, 0)
+                local realHeadPos = char.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
                 local pos, onScreen = Camera:WorldToViewportPoint(realHeadPos)
                 
                 if onScreen and pos.Z > 0 then
@@ -82,14 +81,14 @@ local function GetClosestPlayer()
     return closest
 end
 
-local function Shoot()
-    if not canShoot then return end
-    canShoot = false
-    task.spawn(function()
-        if mouse1click then pcall(mouse1click) end
-        task.wait(0.01)
-        canShoot = true
-    end)
+-- МОМЕНТАЛЬНЫЙ ВЫСТРЕЛ (БЕЗ ЗАДЕРЖЕК)
+local function InstantShoot()
+    if mouse1click then 
+        pcall(mouse1click) 
+    elseif mouse1press and mouse1release then
+        pcall(mouse1press)
+        pcall(mouse1release)
+    end
 end
 
 UserInputService.InputBegan:Connect(function(input, gpe)
@@ -101,9 +100,9 @@ UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Settings.AimbotKey then isKeyPressed = false end
 end)
 
--- ===== СОЗДАНИЕ PREMIUM GUI С ЧЕТЫРЬМЯ ВКЛАДКАМИ =====
+-- ===== СОЗДАНИЕ PREMIUM GUI =====
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SniperArenaUI_v3"
+ScreenGui.Name = "SniperArenaUI_v4"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 999999
 ScreenGui.IgnoreGuiInset = true    
@@ -162,7 +161,7 @@ local Tabs = {
     {Name = "Аим", Icon = "🎯"}, 
     {Name = "ВХ", Icon = "👁️"}, 
     {Name = "Триггер", Icon = "⚡"},
-    {Name = "Misc", Icon = "⚙️"} -- НОВАЯ ВКЛАДКА
+    {Name = "Misc", Icon = "⚙️"}
 }
 
 local function CreatePage(name)
@@ -282,22 +281,19 @@ for i, tabData in ipairs(Tabs) do
     TBtn.MouseButton1Click:Connect(function() SwitchTab(tabData.Name, TBtn) end)
 end
 
--- Распределение по нужным вкладкам
 CreateToggle(Pages["Аим"], "Включить Аимбот", Settings.Aimbot, function(v) Settings.Aimbot = v end)
 CreateToggle(Pages["Аим"], "Показывать Круг FOV", Settings.ShowFOV, function(v) Settings.ShowFOV = v end) 
 CreateSlider(Pages["Аим"], "Радиус FOV", 10, 600, Settings.AimbotFOV, function(v) Settings.AimbotFOV = v; FOVCircle.Radius = v end)
 
 CreateToggle(Pages["ВХ"], "Включить ESP (Боксы)", Settings.ESP_Box, function(v) Settings.ESP_Box = v end)
 CreateToggle(Pages["Триггер"], "Включить Триггербот", Settings.TriggerBot, function(v) Settings.TriggerBot = v end)
-
--- Перемещено во вкладку MISC
 CreateSlider(Pages["Misc"], "Head Expander Size", 1, 15, Settings.HeadSize, function(v) Settings.HeadSize = v end)
 
 UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.RightShift then MainFrame.Visible = not MainFrame.Visible end
 end)
 
--- ===== ИСПРАВЛЕННЫЙ ЦИКЛ FORCE-ОБРАБОТКИ ХИТБОКСОВ =====
+-- ===== ИДЕАЛЬНЫЙ СИНХРОННЫЙ ЦИКЛ ОБРАБОТКИ =====
 RunService.RenderStepped:Connect(function()
     FOVCircle.Visible = Settings.ShowFOV and Settings.Aimbot
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
@@ -308,10 +304,10 @@ RunService.RenderStepped:Connect(function()
             local head = char:FindFirstChild("Head")
             
             if head and head:IsA("BasePart") then
-                -- ЖЕСТКИЙ АПДЕЙТ ХИТБОКСОВ КАЖДЫЙ КАДР (БЕЗ СБРОСА АНИМАЦИЯМИ)
+                -- Постоянное принудительное расширение хитбокса
                 if Settings.HeadSize > 1 then
                     head.Size = Vector3.new(Settings.HeadSize, Settings.HeadSize, Settings.HeadSize)
-                    head.Transparency = 0.7 -- Сделано слегка видимым для тестов работоспособности, можно поменять на 1
+                    head.Transparency = 0.7 
                     head.CanCollide = false
                     head.Massless = true
                 else
@@ -339,31 +335,45 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- СТАБИЛЬНЫЙ АИМБОТ (БЕЗ ТРЯСКИ И СЪЕЗДА КООРДИНАТ)
-    if isKeyPressed then
-        local target = GetClosestPlayer()
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            -- Стабильная точка головы относительно тела противника
-            local exactHeadPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
-            local screenPos, onScreen = Camera:WorldToViewportPoint(exactHeadPos)
+    -- ЛОГИКА АИМА И ВЫСОКОТОЧНОГО ТРИГГЕРА
+    if Settings.TriggerBot then
+        -- Высокоточный Raycast-прострел из центра экрана строго по РЕАЛЬНОМУ хитбоксу
+        local ray = Camera:ViewportPointToRay(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+        
+        local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
+        if result and result.Instance then
+            local hitPart = result.Instance
+            local model = hitPart:FindFirstAncestorOfClass("Model")
             
-            if onScreen then
-                local mousePos = UserInputService:GetMouseLocation()
-                local deltaX = screenPos.X - mousePos.X
-                local deltaY = screenPos.Y - mousePos.Y
-                local dist = Vector2.new(deltaX, deltaY).Magnitude
-                
-                if Settings.TriggerBot and canShoot and dist <= Settings.TriggerPrecision then
-                    Shoot()
-                end
-                
-                if Settings.Aimbot then
-                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, exactHeadPos)
-                    if mousemoverel then
-                        pcall(function() mousemoverel(deltaX, deltaY) end)
+            if model and Players:GetPlayerFromCharacter(model) and Players:GetPlayerFromCharacter(model) ~= LocalPlayer then
+                -- Если луч попал в голову (или расширенную голову, но мы проверяем дистанцию до реального центра шеи)
+                if hitPart.Name == "Head" then
+                    local hrp = model:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        -- Проверяем, находится ли луч в пределах оригинального радиуса головы (1.2-1.5 студа) от центра шеи
+                        local realHeadCenter = hrp.Position + Vector3.new(0, 1.6, 0)
+                        local distanceToTrueHead = (result.Position - realHeadCenter).Magnitude
+                        
+                        if distanceToTrueHead <= 1.5 then -- Срабатывает только на реальный размер головы!
+                            InstantShoot()
+                        end
                     end
                 end
             end
+        end
+    end
+    
+    if isKeyPressed and Settings.Aimbot then
+        local target = GetClosestPlayer()
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            -- Математически чистая позиция реальной головы
+            local exactHeadPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, 1.6, 0)
+            
+            -- Мертвая фиксация камеры БЕЗ конфликтующих смещений мыши
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, exactHeadPos)
         end
     end
 end)
